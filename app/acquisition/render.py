@@ -23,6 +23,21 @@ from app.acquisition.domains import registrable_domain
 USER_AGENT = "WebAuditor/0.1 (+https://github.com/gravesie/web-auditor)"
 NAV_TIMEOUT_MS = 30_000
 SETTLE_MS = 1_500  # let late-firing trackers run after load
+AXE_CDN = "https://cdn.jsdelivr.net/npm/axe-core@4.10.2/axe.min.js"
+_AXE_SCRIPT = (
+    "async () => { const r = await axe.run(document, {resultTypes: ['violations']});"
+    " return { violations: r.violations.map(v => "
+    "({id: v.id, impact: v.impact, nodes: v.nodes.length})) }; }"
+)
+
+
+def _run_axe(page) -> dict | None:
+    """Inject axe-core and run it. Returns a violations summary, or None on failure."""
+    try:
+        page.add_script_tag(url=AXE_CDN)
+        return page.evaluate(_AXE_SCRIPT)
+    except PlaywrightError:
+        return None
 
 
 @dataclass
@@ -53,6 +68,7 @@ class RenderResult:
     cookies: list[CookieRecord] = field(default_factory=list)
     requests: list[RequestRecord] = field(default_factory=list)
     console_errors: list[str] = field(default_factory=list)
+    axe: dict | None = None  # {"violations": [{"id", "impact", "nodes"}]} or None if not run
     error: str | None = None
 
     @property
@@ -60,7 +76,12 @@ class RenderResult:
         return [r for r in self.requests if r.third_party]
 
 
-def render(url: str, wait_until: str = "load", timeout_ms: int = NAV_TIMEOUT_MS) -> RenderResult:
+def render(
+    url: str,
+    wait_until: str = "load",
+    timeout_ms: int = NAV_TIMEOUT_MS,
+    run_axe: bool = False,
+) -> RenderResult:
     """Render a page and capture DOM, cookies, requests and console errors. Never raises."""
     target = url if "://" in url else f"https://{url}"
     result = RenderResult(requested_url=target)
@@ -104,6 +125,8 @@ def render(url: str, wait_until: str = "load", timeout_ms: int = NAV_TIMEOUT_MS)
                         same_site=c.get("sameSite"),
                     )
                 )
+            if run_axe:
+                result.axe = _run_axe(page)
             browser.close()
     except PlaywrightError as exc:
         result.error = f"{type(exc).__name__}: {exc}"

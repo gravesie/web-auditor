@@ -10,14 +10,16 @@ from datetime import UTC, datetime
 
 from app.acquisition.crawler import CrawledPage, crawl
 from app.acquisition.fetcher import Acquisition, fetch
+from app.acquisition.render import render
 from app.audits.base import AuditContext, AuditModule, AuditResult
 from app.audits.build_security import BuildSecurityAudit
+from app.audits.compliance import ComplianceAudit
 from app.db import SessionLocal
 from app.models import AuditRun, Finding, Page, Site, SubAuditResult
 from app.models.enums import RunStatus
 
 # The audits to run. Grows as modules are added.
-AUDIT_MODULES: list[AuditModule] = [BuildSecurityAudit()]
+AUDIT_MODULES: list[AuditModule] = [BuildSecurityAudit(), ComplianceAudit()]
 
 
 def run_audit(domain: str) -> dict:
@@ -43,8 +45,11 @@ def run_audit(domain: str) -> dict:
             session.add(Page(run_id=run.id, url=cp.url, depth=cp.depth, status_code=cp.status))
         session.flush()
 
+        rendered = render(acq.final_url or domain, run_axe=True)
+
         context = AuditContext(
-            site_domain=domain, data={"acquisition": acq, "pages": crawled}
+            site_domain=domain,
+            data={"acquisition": acq, "pages": crawled, "render": rendered},
         )
 
         results: list[tuple[AuditResult, SubAuditResult]] = []
