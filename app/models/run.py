@@ -8,7 +8,7 @@ levels of the hierarchy. Deltas are computed by comparing runs, not stored.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, String, Text
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -76,6 +76,8 @@ class Page(IdMixin, TimestampMixin, Base):
         ForeignKey("audit_runs.id", ondelete="CASCADE"), index=True
     )
     url: Mapped[str] = mapped_column(Text)
+    depth: Mapped[int | None] = mapped_column(Integer)  # click depth from the homepage
+    status_code: Mapped[int | None] = mapped_column(Integer)
 
     run: Mapped["AuditRun"] = relationship(back_populates="pages")
     queries: Mapped[list["Query"]] = relationship(back_populates="page")

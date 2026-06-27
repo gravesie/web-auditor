@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from app.acquisition.crawler import CrawledPage, crawl
 from app.acquisition.fetcher import Acquisition, fetch
 from app.audits.base import AuditContext, AuditModule, AuditResult
 from app.audits.build_security import BuildSecurityAudit
@@ -34,11 +35,17 @@ def run_audit(domain: str) -> dict:
         session.flush()
 
         acq = fetch(domain)
-        page = Page(run_id=run.id, url=acq.final_url or acq.requested_url)
-        session.add(page)
+
+        crawled = crawl(domain)
+        if not crawled:
+            crawled = [CrawledPage(acq.final_url or acq.requested_url, 0, acq.status_code)]
+        for cp in crawled:
+            session.add(Page(run_id=run.id, url=cp.url, depth=cp.depth, status_code=cp.status))
         session.flush()
 
-        context = AuditContext(site_domain=domain, data={"acquisition": acq})
+        context = AuditContext(
+            site_domain=domain, data={"acquisition": acq, "pages": crawled}
+        )
 
         results: list[tuple[AuditResult, SubAuditResult]] = []
         for module in AUDIT_MODULES:
@@ -80,7 +87,7 @@ def run_audit(domain: str) -> dict:
         run.finished_at = datetime.now(UTC)
         session.commit()
 
-        return _summary(domain, run, acq, results)
+        return _summary(domain, run, acq, results, len(crawled))
     except Exception:
         # The acquisition step never raises, so a failure here is a storage problem.
         # Roll back the whole run rather than leave a half-written snapshot.
@@ -95,12 +102,14 @@ def _summary(
     run: AuditRun,
     acq: Acquisition,
     results: list[tuple[AuditResult, SubAuditResult]],
+    page_count: int,
 ) -> dict:
     return {
         "domain": domain,
         "final_url": acq.final_url,
         "status_code": acq.status_code,
         "error": acq.error,
+        "page_count": page_count,
         "site_score": run.site_score,
         "audits": [
             {
