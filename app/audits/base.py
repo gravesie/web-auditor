@@ -21,7 +21,8 @@ from app.models.enums import DetectionTag, FindingStatus, Severity
 @dataclass
 class CheckResult:
     key: str
-    score: float  # 0..100
+    # 0..100, or None for an informational check that does not contribute to the score.
+    score: float | None
     status: FindingStatus
     severity: Severity
     detection: DetectionTag
@@ -41,7 +42,9 @@ class CategoryDef:
 @dataclass
 class CategoryResult:
     key: str
-    score: float
+    # None when the category has no scorable checks (not yet assessed). Such a
+    # category is excluded from the audit score rather than counted as zero.
+    score: float | None
     applicable: bool
     checks: list[CheckResult]
 
