@@ -23,6 +23,18 @@ MAX_DEPTH = 3
 REQUEST_TIMEOUT = 15.0
 
 _LINK_RE = re.compile(r'<a\s[^>]*?href=["\']([^"\']+)["\']', re.I)
+_TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
+_META_TAG_RE = re.compile(r"<meta\s[^>]*?>", re.I)
+_NAME_DESC_RE = re.compile(r'name=["\']description["\']', re.I)
+_CONTENT_RE = re.compile(r'content=["\']([^"\']*)["\']', re.I)
+
+
+def _meta_description(html: str) -> str | None:
+    for tag in _META_TAG_RE.findall(html):
+        if _NAME_DESC_RE.search(tag):
+            match = _CONTENT_RE.search(tag)
+            return match.group(1).strip() if match else None
+    return None
 
 
 @dataclass
@@ -30,6 +42,8 @@ class CrawledPage:
     url: str
     depth: int
     status: int | None
+    title: str | None = None
+    meta_description: str | None = None
 
 
 def _host(domain: str) -> str:
@@ -62,9 +76,16 @@ def crawl(domain: str, max_pages: int = MAX_PAGES, max_depth: int = MAX_DEPTH) -
             if final in done:
                 continue
             done.add(final)
-            pages.append(CrawledPage(final, depth, resp.status_code))
 
-            if depth >= max_depth or "html" not in resp.headers.get("content-type", ""):
+            is_html = "html" in resp.headers.get("content-type", "")
+            title = meta = None
+            if is_html:
+                title_match = _TITLE_RE.search(resp.text)
+                title = title_match.group(1).strip()[:300] if title_match else None
+                meta = _meta_description(resp.text)
+            pages.append(CrawledPage(final, depth, resp.status_code, title, meta))
+
+            if depth >= max_depth or not is_html:
                 continue
 
             for href in _LINK_RE.findall(resp.text):
