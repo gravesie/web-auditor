@@ -24,6 +24,7 @@ def main() -> None:
     if summary["error"]:
         print(f"  acquisition error: {summary['error']}")
 
+    print(f"Pages crawled: {summary['page_count']}")
     score = summary["site_score"]
     print(f"Site score: {score:.1f}/100\n" if score is not None else "Site score: n/a\n")
 
