@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:17
+    container_name: web-auditor-db
+    environment:
+      POSTGRES_USER: webauditor
+      POSTGRES_PASSWORD: webauditor
+      POSTGRES_DB: webauditor
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webauditor -d webauditor"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

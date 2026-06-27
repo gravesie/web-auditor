@@ -1,0 +1,1 @@
+"""Web Auditor application package."""

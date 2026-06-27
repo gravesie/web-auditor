@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Web Auditor{% endblock %}
+{% block content %}
+  <h2>Sites</h2>
+  {% if sites %}
+    <ul>
+      {% for site in sites %}
+        <li>{{ site.name or site.domain }} <span class="muted">({{ site.domain }})</span></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="card">
+      <p class="muted">No sites yet. Audited sites and their scores will appear here.</p>
+    </div>
+  {% endif %}
+{% endblock %}
