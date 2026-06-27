@@ -1,25 +1,17 @@
 """FastAPI application entry point.
 
-Serves the server-rendered dashboard and a health endpoint. Audits run in
-background workers (added when the acquisition stage lands), not here.
+Serves the server-rendered dashboard (app/web/routes.py) and a health endpoint.
+Audits run via the CLI / background workers, not in a web request.
 """
 
-from pathlib import Path
-
-from fastapi import Depends, FastAPI, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
-from sqlalchemy import select, text
-from sqlalchemy.orm import Session
+from fastapi import FastAPI
+from sqlalchemy import text
 
 from app.config import settings
-from app.db import engine, get_session
-from app.models import Site
+from app.db import engine
+from app.web.routes import router as web_router
 
 app = FastAPI(title="Web Auditor", version="0.1.0")
-
-_TEMPLATES_DIR = Path(__file__).parent / "web" / "templates"
-templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
 
 @app.get("/health")
@@ -34,9 +26,4 @@ def health() -> dict[str, str]:
     return {"status": "ok", "env": settings.app_env, "database": database}
 
 
-@app.get("/", response_class=HTMLResponse)
-def dashboard(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
-    sites = session.execute(select(Site).order_by(Site.created_at.desc())).scalars().all()
-    return templates.TemplateResponse(
-        request, "dashboard.html", {"sites": sites}
-    )
+app.include_router(web_router)

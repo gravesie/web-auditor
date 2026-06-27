@@ -6,19 +6,52 @@
   <title>{% block title %}Web Auditor{% endblock %}</title>
   <script src="https://unpkg.com/htmx.org@2.0.3"></script>
   <style>
-    :root { --fg: #1d2433; --muted: #6b7280; --line: #e5e7eb; --bg: #f9fafb; }
+    :root {
+      --fg: #1d2433; --muted: #6b7280; --line: #e5e7eb; --bg: #f9fafb; --card: #fff;
+      --good: #15803d; --good-bg: #dcfce7; --ok: #b45309; --ok-bg: #fef3c7;
+      --bad: #b91c1c; --bad-bg: #fee2e2; --info: #475569; --info-bg: #f1f5f9;
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-           color: var(--fg); background: var(--bg); }
-    header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--line); background: #fff; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+           color: var(--fg); background: var(--bg); line-height: 1.45; }
+    a { color: #1d4ed8; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--line); background: var(--card); }
     header h1 { margin: 0; font-size: 1.1rem; }
+    header h1 a { color: var(--fg); }
     main { max-width: 1000px; margin: 0 auto; padding: 1.5rem; }
+    h2 { font-size: 1.25rem; margin: 0 0 1rem; }
+    h3 { font-size: 1rem; margin: 1.25rem 0 0.5rem; }
     .muted { color: var(--muted); }
-    .card { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 1.25rem; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+            padding: 1.25rem; margin-bottom: 1rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 0.6rem 0.5rem; border-bottom: 1px solid var(--line); }
+    th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+
+    .score { font-weight: 700; }
+    .bar { display: inline-block; vertical-align: middle; width: 120px; height: 8px;
+           background: var(--line); border-radius: 4px; overflow: hidden; margin-right: 0.5rem; }
+    .bar > span { display: block; height: 100%; }
+    .good > span, .fill-good { background: var(--good); }
+    .ok > span, .fill-ok { background: var(--ok); }
+    .bad > span, .fill-bad { background: var(--bad); }
+
+    .badge { display: inline-block; font-size: 0.7rem; font-weight: 600; padding: 0.1rem 0.45rem;
+             border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em; }
+    .b-pass { color: var(--good); background: var(--good-bg); }
+    .b-warn { color: var(--ok); background: var(--ok-bg); }
+    .b-fail { color: var(--bad); background: var(--bad-bg); }
+    .b-info { color: var(--info); background: var(--info-bg); }
+    .tag { font-size: 0.7rem; color: var(--muted); border: 1px solid var(--line);
+           border-radius: 4px; padding: 0.05rem 0.35rem; }
+    .finding { padding: 0.5rem 0; border-bottom: 1px solid var(--line); }
+    .finding:last-child { border-bottom: none; }
+    .rec { font-size: 0.85rem; color: var(--muted); margin-top: 0.2rem; }
   </style>
 </head>
 <body>
-  <header><h1>Web Auditor</h1></header>
+  <header><h1><a href="/">Web Auditor</a></h1></header>
   <main>{% block content %}{% endblock %}</main>
 </body>
 </html>
