@@ -14,12 +14,17 @@ from app.acquisition.render import render
 from app.audits.base import AuditContext, AuditModule, AuditResult
 from app.audits.build_security import BuildSecurityAudit
 from app.audits.compliance import ComplianceAudit
+from app.audits.technical_seo import TechnicalSeoAudit
 from app.db import SessionLocal
 from app.models import AuditRun, Finding, Page, Site, SubAuditResult
 from app.models.enums import RunStatus
 
 # The audits to run. Grows as modules are added.
-AUDIT_MODULES: list[AuditModule] = [BuildSecurityAudit(), ComplianceAudit()]
+AUDIT_MODULES: list[AuditModule] = [
+    BuildSecurityAudit(),
+    ComplianceAudit(),
+    TechnicalSeoAudit(),
+]
 
 
 def run_audit(domain: str) -> dict:
