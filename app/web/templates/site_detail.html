@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "_macros.html" import score_bar %}
+{% block title %}{{ site.domain }} — Web Auditor{% endblock %}
+{% block content %}
+  <p><a href="/">&larr; All sites</a></p>
+  <h2>{{ site.name or site.domain }} <span class="muted">{{ site.domain }}</span></h2>
+
+  {% if latest %}
+    <div class="card">
+      <div style="font-size:1.1rem;">Site score: {{ score_bar(latest.site_score) }}
+        <span class="muted">/ 100</span></div>
+      <p class="muted" style="margin-bottom:0;">
+        Run {{ latest.started_at.strftime('%Y-%m-%d %H:%M') }} · status {{ latest.status }}
+      </p>
+    </div>
+
+    {% for audit in audits %}
+      <div class="card">
+        <h3 style="display:flex; justify-content:space-between; align-items:center;">
+          <span>{{ audit.label }}</span>
+          <span>{{ score_bar(audit.score) }}
+            <span class="muted" style="font-weight:400; font-size:0.8rem;">
+              completeness {{ '%.0f'|format((audit.completeness or 0) * 100) }}%</span>
+          </span>
+        </h3>
+        {% for cat in audit.categories %}
+          <h4 style="margin:0.9rem 0 0.2rem; font-size:0.9rem;">{{ cat.label }}</h4>
+          {% for f in cat.findings %}
+            <div class="finding">
+              <span class="badge b-{{ f.status }}">{{ f.status }}</span>
+              <strong>{{ f.check_key }}</strong>
+              <span class="tag">{{ f.detection_tag }}</span>
+              {% if f.severity not in ['info', 'low'] %}
+                <span class="tag">{{ f.severity }}</span>
+              {% endif %}
+              {% if f.value %}<div>{{ f.value }}</div>{% endif %}
+              {% if f.recommendation %}<div class="rec">&rarr; {{ f.recommendation }}</div>{% endif %}
+            </div>
+          {% endfor %}
+        {% endfor %}
+      </div>
+    {% endfor %}
+
+    {% if runs | length > 1 %}
+      <div class="card">
+        <h3>Run history</h3>
+        <table>
+          <thead><tr><th>When</th><th>Score</th></tr></thead>
+          <tbody>
+            {% for r in runs %}
+              <tr>
+                <td class="muted">{{ r.started_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>{{ score_bar(r.site_score) }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="card"><p class="muted">No runs yet for this site.</p></div>
+  {% endif %}
+{% endblock %}

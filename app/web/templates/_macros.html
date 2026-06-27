@@ -1,0 +1,9 @@
+{% macro score_bar(score) -%}
+  {%- if score is none -%}
+    <span class="muted">n/a</span>
+  {%- else -%}
+    {%- set cls = 'good' if score >= 75 else ('ok' if score >= 50 else 'bad') -%}
+    <span class="bar {{ cls }}"><span style="width: {{ score }}%"></span></span>
+    <span class="score">{{ '%.0f'|format(score) }}</span>
+  {%- endif -%}
+{%- endmacro %}
