@@ -76,3 +76,21 @@ pytest
 The suite is offline and deterministic (no network or credentials): it covers the
 scoring engine, the audit modules against synthetic acquisition data, and the
 parsing / graceful-degradation logic.
+
+## Running audits
+
+Three ways to run an audit:
+
+```sh
+# 1. One audit, in-process (no worker needed)
+python -m app.cli example.com [--email]
+
+# 2. From the dashboard: "Run audit" on a site page queues a run. A worker executes it:
+python -m app.worker        # long-running; processes queued runs, emails when asked
+
+# 3. On a schedule: queue a run (with email) for every site, then let the worker run them.
+python -m app.scheduler     # drive from cron / Windows Task Scheduler
+```
+
+The queue is the database itself (pending → running → complete/failed on each run),
+so no Redis is required. A queued run sits as `pending` until the worker claims it.

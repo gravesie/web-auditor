@@ -1,0 +1,18 @@
+<div id="run-status"
+  {% if run and run.status in ['pending', 'running'] %}
+    hx-get="/sites/{{ site_id }}/status" hx-trigger="every 3s" hx-swap="outerHTML"
+  {% endif %}>
+  {% if run %}
+    <span class="muted">Latest run:</span> <strong>{{ run.status }}</strong>
+    {% if run.status in ['pending', 'running'] %}
+      <span class="muted">— in progress, updates automatically…</span>
+    {% elif run.status == 'complete' %}
+      <a href="/sites/{{ site_id }}">view results</a>
+    {% elif run.status == 'failed' %}
+      <span class="delta down">failed</span>
+      {% if run.error_message %}<span class="muted">{{ run.error_message }}</span>{% endif %}
+    {% endif %}
+  {% else %}
+    <span class="muted">No runs yet.</span>
+  {% endif %}
+</div>

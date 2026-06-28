@@ -13,6 +13,7 @@ from starlette.templating import Jinja2Templates
 from app.db import get_session
 from app.models import AuditRun, Site
 from app.reporting.view import build_audit_view, build_comparison
+from app.runner import create_pending_run
 
 router = APIRouter()
 
@@ -118,6 +119,25 @@ def update_site(
     site.is_ymyl = is_ymyl
     session.commit()
     return RedirectResponse(url=f"/sites/{site.id}", status_code=303)
+
+
+@router.post("/sites/{site_id}/run")
+def run_site(site_id: UUID, session: Session = Depends(get_session)):
+    site = session.get(Site, site_id)
+    if site is None:
+        return HTMLResponse("Site not found", status_code=404)
+    create_pending_run(site.domain)  # queued; the worker executes it
+    return RedirectResponse(url=f"/sites/{site_id}", status_code=303)
+
+
+@router.get("/sites/{site_id}/status", response_class=HTMLResponse)
+def site_status(
+    site_id: UUID, request: Request, session: Session = Depends(get_session)
+) -> HTMLResponse:
+    run = _latest_run(session, site_id)
+    return templates.TemplateResponse(
+        request, "_run_status.html", {"site_id": site_id, "run": run}
+    )
 
 
 @router.get("/sites/{site_id}", response_class=HTMLResponse)

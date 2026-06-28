@@ -6,6 +6,7 @@ added later; the logic here is what the worker will call.
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 
 from app.acquisition.crawler import CrawledPage, crawl
@@ -25,7 +26,7 @@ from app.audits.technical_seo import TechnicalSeoAudit
 from app.config import settings
 from app.db import SessionLocal
 from app.models import AuditRun, Finding, Page, Site, SubAuditResult
-from app.models.enums import RunStatus
+from app.models.enums import RunStatus, RunTrigger
 
 # The audits to run. Grows as modules are added.
 AUDIT_MODULES: list[AuditModule] = [
@@ -41,8 +42,16 @@ AUDIT_MODULES: list[AuditModule] = [
 ]
 
 
-def run_audit(domain: str) -> dict:
-    """Run every registered audit against a domain and store the result."""
+def _as_uuid(run_id: str | uuid.UUID) -> uuid.UUID:
+    return run_id if isinstance(run_id, uuid.UUID) else uuid.UUID(run_id)
+
+
+def create_pending_run(domain: str, *, email: bool = False, scheduled: bool = False) -> str:
+    """Create a pending run for a domain (creating the site if needed). Returns the run id.
+
+    This is the enqueue step: the web request / scheduler calls it, then the worker
+    picks the pending run up and executes it.
+    """
     session = SessionLocal()
     try:
         site = session.query(Site).filter_by(domain=domain).one_or_none()
@@ -50,11 +59,37 @@ def run_audit(domain: str) -> dict:
             site = Site(domain=domain)
             session.add(site)
             session.flush()
-
-        run = AuditRun(site_id=site.id, status=RunStatus.running, started_at=datetime.now(UTC))
+        run = AuditRun(
+            site_id=site.id,
+            status=RunStatus.pending,
+            trigger=RunTrigger.scheduled if scheduled else RunTrigger.manual,
+            email_requested=email,
+        )
         session.add(run)
-        session.flush()
+        session.commit()
+        return str(run.id)
+    finally:
+        session.close()
 
+
+def execute_run(run_id: str | uuid.UUID) -> dict:
+    """Execute an existing run: acquire once, run every audit, persist the snapshot.
+
+    Marks the run running, then complete; on failure marks it failed with the error.
+    """
+    session = SessionLocal()
+    run = session.get(AuditRun, _as_uuid(run_id))
+    if run is None:
+        session.close()
+        raise ValueError(f"audit run {run_id} not found")
+    site = session.get(Site, run.site_id)
+    domain = site.domain
+    run.status = RunStatus.running
+    run.started_at = datetime.now(UTC)
+    run.error_message = None
+    session.commit()
+
+    try:
         acq = fetch(domain)
 
         crawled = crawl(domain)
@@ -107,9 +142,8 @@ def run_audit(domain: str) -> dict:
                     )
             results.append((result, sar))
 
-        # Site score is the mean of the audits that produced a score. Audits that
-        # could not be assessed (score None) are excluded, and the equal share is
-        # taken over the scored audits only.
+        # Site score is the mean of the audits that produced a score; audits that
+        # could not be assessed (score None) are excluded and the share rebalanced.
         scored = [r.score for r, _ in results if r.score is not None]
         run.site_score = sum(scored) / len(scored) if scored else None
         share = 1.0 / len(scored) if scored else 0.0
@@ -119,15 +153,24 @@ def run_audit(domain: str) -> dict:
         run.status = RunStatus.complete
         run.finished_at = datetime.now(UTC)
         session.commit()
-
         return _summary(domain, run, acq, results, len(crawled))
-    except Exception:
-        # The acquisition step never raises, so a failure here is a storage problem.
-        # Roll back the whole run rather than leave a half-written snapshot.
+    except Exception as exc:
+        # Roll back the partial snapshot, then record the failure on the run row.
         session.rollback()
+        failed = session.get(AuditRun, _as_uuid(run_id))
+        if failed is not None:
+            failed.status = RunStatus.failed
+            failed.error_message = str(exc)[:1000]
+            failed.finished_at = datetime.now(UTC)
+            session.commit()
         raise
     finally:
         session.close()
+
+
+def run_audit(domain: str) -> dict:
+    """Create and immediately execute a run, in-process. Used by the CLI."""
+    return execute_run(create_pending_run(domain))
 
 
 def _summary(
