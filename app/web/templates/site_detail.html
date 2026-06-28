@@ -5,6 +5,14 @@
   <p><a href="/">&larr; All sites</a> <span class="actions"><a href="/sites/{{ site.id }}/edit">Edit settings</a></span></p>
   <h2>{{ site.name or site.domain }} <span class="muted">{{ site.domain }}</span></h2>
 
+  <div class="card">
+    <form method="post" action="/sites/{{ site.id }}/run"
+          style="display:inline; margin-right:0.75rem;">
+      <button type="submit">Run audit</button>
+    </form>
+    <span hx-get="/sites/{{ site.id }}/status" hx-trigger="load" hx-swap="outerHTML"></span>
+  </div>
+
   {% if latest %}
     <div class="card">
       <div style="font-size:1.1rem;">Site score: {{ score_bar(latest.site_score) }}

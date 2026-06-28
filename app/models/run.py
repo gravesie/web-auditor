@@ -8,7 +8,7 @@ levels of the hierarchy. Deltas are computed by comparing runs, not stored.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -37,6 +37,9 @@ class AuditRun(IdMixin, TimestampMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     site_score: Mapped[float | None] = mapped_column(Float)
+    # The worker emails the PDF report on completion when this is set.
+    email_requested: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    error_message: Mapped[str | None] = mapped_column(Text)
 
     site: Mapped["Site"] = relationship(back_populates="runs")  # noqa: F821
     results: Mapped[list["SubAuditResult"]] = relationship(
