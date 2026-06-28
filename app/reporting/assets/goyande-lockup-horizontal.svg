@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 270 80" width="270" height="80" role="img" aria-label="Goyande horizontal logo lockup">
+  <title>Goyande horizontal lockup</title>
+  <!-- Wordmark set in Manrope. For final production files, convert the text to outlines so the file does not depend on the font being installed. -->
+  <g transform="translate(8,8)">
+    <path d="M32,48 C23,46 14,42 10,35 C19,34 29,41 32,48 Z" fill="#102A4C" opacity="0.5"/>
+    <path d="M32,48 C41,46 50,42 54,35 C45,34 35,41 32,48 Z" fill="#102A4C" opacity="0.5"/>
+    <path d="M32,48 C25,42 19,32 18,23 C27,27 31,39 32,48 Z" fill="#102A4C"/>
+    <path d="M32,48 C39,42 45,32 46,23 C37,27 33,39 32,48 Z" fill="#102A4C"/>
+    <path d="M32,48 C28,38 28,22 32,14 C36,22 36,38 32,48 Z" fill="#10B981"/>
+  </g>
+  <text x="88" y="46" font-family="Manrope, 'Segoe UI', system-ui, sans-serif" font-size="38" font-weight="600" letter-spacing="-1" fill="#102A4C">goyande</text>
+  <text x="89" y="62" font-family="Manrope, 'Segoe UI', system-ui, sans-serif" font-size="8.5" font-weight="600" letter-spacing="2.2" fill="#475569">GO BEYOND AUTOMATION</text>
+</svg>
