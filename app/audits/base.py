@@ -52,7 +52,9 @@ class CategoryResult:
 @dataclass
 class AuditResult:
     audit_key: str
-    score: float
+    # None when nothing in the audit could be assessed (e.g. an external source was
+    # unavailable); such an audit is excluded from the site score.
+    score: float | None
     completeness: float  # 0..1, share backed by observed / connected data
     categories: list[CategoryResult]
 

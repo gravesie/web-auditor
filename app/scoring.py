@@ -19,11 +19,13 @@ def category_score(checks: list[CheckResult]) -> float | None:
     return sum(scored) / len(scored)
 
 
-def audit_score(categories: list[CategoryResult], defs: dict[str, CategoryDef]) -> float:
+def audit_score(categories: list[CategoryResult], defs: dict[str, CategoryDef]) -> float | None:
     """Weighted mean over categories that both apply and have a score.
 
     A category with no scorable checks is excluded and its weight rebalanced
-    away, the same as a conditional category that does not apply.
+    away, the same as a conditional category that does not apply. Returns None when
+    nothing in the audit could be scored, so the audit reports as not-assessed
+    rather than zero.
     """
     weighted = 0.0
     total_weight = 0.0
@@ -33,7 +35,7 @@ def audit_score(categories: list[CategoryResult], defs: dict[str, CategoryDef]) 
         weight = defs[cat.key].weight
         weighted += cat.score * weight
         total_weight += weight
-    return weighted / total_weight if total_weight else 0.0
+    return weighted / total_weight if total_weight else None
 
 
 def completeness(categories: list[CategoryResult]) -> float:

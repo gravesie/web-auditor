@@ -10,14 +10,17 @@ from datetime import UTC, datetime
 
 from app.acquisition.crawler import CrawledPage, crawl
 from app.acquisition.fetcher import Acquisition, fetch
+from app.acquisition.pagespeed import fetch_pagespeed
 from app.acquisition.render import render
 from app.audits.base import AuditContext, AuditModule, AuditResult
 from app.audits.build_security import BuildSecurityAudit
 from app.audits.compliance import ComplianceAudit
 from app.audits.content_quality import ContentQualityAudit
 from app.audits.on_page_seo import OnPageSeoAudit
+from app.audits.performance import PerformanceAudit
 from app.audits.schema import SchemaAudit
 from app.audits.technical_seo import TechnicalSeoAudit
+from app.config import settings
 from app.db import SessionLocal
 from app.models import AuditRun, Finding, Page, Site, SubAuditResult
 from app.models.enums import RunStatus
@@ -30,6 +33,7 @@ AUDIT_MODULES: list[AuditModule] = [
     OnPageSeoAudit(),
     SchemaAudit(),
     ContentQualityAudit(),
+    PerformanceAudit(),
 ]
 
 
@@ -57,10 +61,18 @@ def run_audit(domain: str) -> dict:
         session.flush()
 
         rendered = render(acq.final_url or domain, run_axe=True)
+        pagespeed = fetch_pagespeed(
+            acq.final_url or domain, settings.pagespeed_api_key, strategy="mobile"
+        )
 
         context = AuditContext(
             site_domain=domain,
-            data={"acquisition": acq, "pages": crawled, "render": rendered},
+            data={
+                "acquisition": acq,
+                "pages": crawled,
+                "render": rendered,
+                "pagespeed": pagespeed,
+            },
         )
 
         results: list[tuple[AuditResult, SubAuditResult]] = []
@@ -91,13 +103,14 @@ def run_audit(domain: str) -> dict:
                     )
             results.append((result, sar))
 
-        # Site score is the mean of the audits that ran (one for now). Each audit's
-        # weighted contribution uses an equal share among the audits in this run.
-        run_scores = [r.score for r, _ in results]
-        run.site_score = sum(run_scores) / len(run_scores) if run_scores else None
-        share = 1.0 / len(results) if results else 0.0
+        # Site score is the mean of the audits that produced a score. Audits that
+        # could not be assessed (score None) are excluded, and the equal share is
+        # taken over the scored audits only.
+        scored = [r.score for r, _ in results if r.score is not None]
+        run.site_score = sum(scored) / len(scored) if scored else None
+        share = 1.0 / len(scored) if scored else 0.0
         for result, sar in results:
-            sar.weighted_contribution = result.score * share
+            sar.weighted_contribution = result.score * share if result.score is not None else None
 
         run.status = RunStatus.complete
         run.finished_at = datetime.now(UTC)

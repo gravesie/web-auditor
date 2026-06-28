@@ -23,5 +23,9 @@ class Settings(BaseSettings):
     # Used to encrypt stored connector credentials. Must be overridden outside dev.
     secret_key: str = "change-me-in-production"
 
+    # Google PageSpeed Insights API key (performance audit). Optional: PSI works
+    # keyless at a lower quota.
+    pagespeed_api_key: str | None = None
+
 
 settings = Settings()
