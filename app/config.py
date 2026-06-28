@@ -37,5 +37,11 @@ class Settings(BaseSettings):
     email_to: str = "admin@pggi.co.uk"
     outbox_dir: str = "outbox"
 
+    # Anthropic API key for the LLM judgement passes (GEO answerability, and content
+    # quality later). Optional: those checks degrade to needs-connection without it.
+    anthropic_api_key: str | None = None
+    # Model for the LLM passes. Opus 4.8 by default; override to trade cost/latency.
+    llm_model: str = "claude-opus-4-8"
+
 
 settings = Settings()

@@ -16,8 +16,9 @@ import re
 from urllib.parse import urlsplit
 
 import httpx
+from pydantic import BaseModel
 
-from app import scoring
+from app import llm, scoring
 from app.acquisition.fetcher import Acquisition
 from app.acquisition.render import RenderResult
 from app.audits.base import (
@@ -82,6 +83,73 @@ def _ai_crawler_blocks(robots_txt: str) -> set[str]:
             if value == "/":
                 blocked |= current & wanted
     return blocked
+
+
+class _AnsweredQuestion(BaseModel):
+    question: str
+    answered: bool
+    note: str
+
+
+class _AnswerabilityJudgement(BaseModel):
+    questions: list[_AnsweredQuestion]
+    summary: str
+
+
+_ANSWERABILITY_SYSTEM = (
+    "You assess whether a web page answers the questions a prospective buyer would ask "
+    "before choosing this provider. Infer 5 to 7 realistic buyer questions from the page "
+    "(pricing, what is offered, who it is for, proof, how to start, and similar), then "
+    "judge whether the page actually answers each. Mark answered=true only when the page "
+    "gives a direct, findable answer, not merely a related mention. Keep each note to one "
+    "short sentence."
+)
+
+
+def _llm_answerability(text: str) -> CheckResult | None:
+    """LLM judgement of how well the page answers likely buyer questions. None if unavailable."""
+    if not text or not llm.available():
+        return None
+    result = llm.judge(
+        _ANSWERABILITY_SYSTEM,
+        f"Page content:\n\n{text}",
+        _AnswerabilityJudgement,
+        max_tokens=1500,
+    )
+    if result is None or not result.questions:
+        return None
+
+    answered = [q for q in result.questions if q.answered]
+    unanswered = [q for q in result.questions if not q.answered]
+    score = len(answered) / len(result.questions) * 100
+    if score >= 80:
+        status, severity = FindingStatus.passed, Severity.low
+    elif score >= 50:
+        status, severity = FindingStatus.warn, Severity.medium
+    else:
+        status, severity = FindingStatus.warn, Severity.high
+
+    recommendation = None
+    if unanswered:
+        gaps = "; ".join(q.question for q in unanswered[:5])
+        recommendation = f"Answer these buyer questions directly on the page: {gaps}"
+
+    return CheckResult(
+        "icp_question_coverage",
+        score,
+        status,
+        severity,
+        _INF,
+        value=(
+            f"answers {len(answered)} of {len(result.questions)} likely buyer questions: "
+            f"{result.summary}"
+        ),
+        recommendation=recommendation,
+        evidence={
+            "answered": [q.question for q in answered],
+            "unanswered": [q.question for q in unanswered],
+        },
+    )
 
 
 def _has_llms_txt(host: str) -> bool:
@@ -181,11 +249,24 @@ class GeoAudit(AuditModule):
             value="FAQ / Q&A content present" if has_qa else "no explicit FAQ / Q&A content",
             recommendation=None if has_qa else "Answer common questions directly.",
         )
-        note = CheckResult(
-            "icp_question_coverage", None, FindingStatus.info, Severity.info, _NEEDS,
-            value="coverage of the real ICP questions needs the synthesis layer and an LLM pass",
-        )
-        checks = [faq, note]
+
+        # LLM judgement of buyer-question coverage when the key is configured;
+        # otherwise the original needs-connection note so the audit still runs.
+        coverage = _llm_answerability(llm.visible_text(dom))
+        if coverage is None:
+            coverage = CheckResult(
+                "icp_question_coverage", None, FindingStatus.info, Severity.info, _NEEDS,
+                value="buyer-question coverage needs an LLM pass (no API key configured)",
+            )
+            checks = [faq, coverage]
+        else:
+            # The inferred coverage is from buyer questions Claude infers from the page;
+            # the data-backed version (real questions from GA4 / Search Console) is deeper.
+            upgrade = CheckResult(
+                "icp_question_source", None, FindingStatus.info, Severity.info, _NEEDS,
+                value="real buyer questions from Search Console / GA4 would sharpen this",
+            )
+            checks = [faq, coverage, upgrade]
         return CategoryResult("answerability", scoring.category_score(checks), True, checks)
 
     def _ai_crawler_access(self, acq: Acquisition, host: str) -> CategoryResult:
