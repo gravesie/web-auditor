@@ -14,6 +14,7 @@ from app.acquisition.render import render
 from app.audits.base import AuditContext, AuditModule, AuditResult
 from app.audits.build_security import BuildSecurityAudit
 from app.audits.compliance import ComplianceAudit
+from app.audits.content_quality import ContentQualityAudit
 from app.audits.on_page_seo import OnPageSeoAudit
 from app.audits.schema import SchemaAudit
 from app.audits.technical_seo import TechnicalSeoAudit
@@ -28,6 +29,7 @@ AUDIT_MODULES: list[AuditModule] = [
     TechnicalSeoAudit(),
     OnPageSeoAudit(),
     SchemaAudit(),
+    ContentQualityAudit(),
 ]
 
 
