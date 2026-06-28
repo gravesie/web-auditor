@@ -24,14 +24,14 @@ RESEND_ENDPOINT = "https://api.resend.com/emails"
 
 def _subject(report: Report) -> str:
     if report.site_score is None:
-        return f"Website audit: {report.domain}"
-    return f"Website audit: {report.domain} — {report.site_score:.0f}/100"
+        return f"Goyande AI website audit: {report.domain}"
+    return f"Goyande AI website audit: {report.domain} ({report.site_score:.0f}/100)"
 
 
 def _body(report: Report) -> str:
     score = "n/a" if report.site_score is None else f"{report.site_score:.1f}/100"
     return (
-        f"Website audit report for {report.domain} is attached.\n\n"
+        f"Goyande AI website audit for {report.domain} is attached.\n\n"
         f"Overall site score: {score}\n"
     )
 

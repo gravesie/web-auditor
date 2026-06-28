@@ -14,6 +14,7 @@ from pathlib import Path
 import jinja2
 from playwright.sync_api import sync_playwright
 
+from app import __version__
 from app.db import SessionLocal
 from app.models import AuditRun, Site
 from app.reporting.view import build_audit_view
@@ -31,14 +32,16 @@ _LOGO_SVG = (_ASSETS / "goyande-lockup-horizontal.svg").read_text(encoding="utf-
 # empty because the branded masthead lives in the body, on page one.
 _HEADER_TEMPLATE = "<div></div>"
 _FOOTER_TEMPLATE = (
-    '<div style="font-size:8px; width:100%; margin:0 10mm; padding-top:4px;'
+    '<div style="font-size:8px; width:100%; box-sizing:border-box; padding:4px 12mm 0;'
     " color:#475569; border-top:1px solid #d1d5db;"
-    " font-family:\"Segoe UI\",system-ui,sans-serif; display:flex;"
+    " font-family:'Segoe UI',system-ui,sans-serif; display:flex;"
     ' justify-content:space-between; align-items:center;">'
-    '<span style="color:#102A4C; font-weight:600;">goyande.ai</span>'
+    '<span><span style="color:#102A4C; font-weight:600;">goyande.ai</span>'
+    f"&nbsp;&middot;&nbsp;v{__version__}</span>"
     "<span>Indicative audit for guidance only; not legal or professional advice.</span>"
     "<span>&copy; 2026 Peter Graves trading as Goyande AI"
-    ' &middot; <span class="pageNumber"></span>/<span class="totalPages"></span></span>'
+    "&nbsp;&nbsp;&middot;&nbsp;&nbsp;"
+    'Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>'
     "</div>"
 )
 
@@ -69,7 +72,7 @@ def generate_report(run_id) -> Report:
         session.close()
 
     pdf = _html_to_pdf(html)
-    filename = f"audit-{domain}-{started:%Y-%m-%d}.pdf"
+    filename = f"Goyande-AI-website-audit-{domain}-{started:%Y-%m-%d}.pdf"
     return Report(pdf=pdf, filename=filename, domain=domain, site_score=score)
 
 
