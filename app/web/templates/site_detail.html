@@ -2,7 +2,7 @@
 {% from "_macros.html" import score_bar, delta_badge %}
 {% block title %}{{ site.domain }} — Web Auditor{% endblock %}
 {% block content %}
-  <p><a href="/">&larr; All sites</a></p>
+  <p><a href="/">&larr; All sites</a> <span class="actions"><a href="/sites/{{ site.id }}/edit">Edit settings</a></span></p>
   <h2>{{ site.name or site.domain }} <span class="muted">{{ site.domain }}</span></h2>
 
   {% if latest %}

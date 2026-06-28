@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit site' if site else 'Add site' }} — Web Auditor{% endblock %}
+{% block content %}
+  <p><a href="{{ ('/sites/' ~ site.id) if site else '/' }}">&larr; Back</a></p>
+  <h2>{{ 'Edit site' if site else 'Add a site' }}</h2>
+
+  {% if error %}
+    <div class="card error"><p style="margin:0;">{{ error }}</p></div>
+  {% endif %}
+
+  <div class="card">
+    <form method="post" action="{{ ('/sites/' ~ site.id ~ '/edit') if site else '/sites' }}">
+      <p>
+        <label>Domain</label>
+        {% if site %}
+          <input type="text" value="{{ site.domain }}" disabled>
+          <span class="muted">the domain can't be changed</span>
+        {% else %}
+          <input type="text" name="domain" placeholder="example.com" required autofocus>
+        {% endif %}
+      </p>
+      <p>
+        <label>Name (optional)</label>
+        <input type="text" name="name" value="{{ (site.name or '') if site else '' }}">
+      </p>
+      <p>
+        <label>Business type (optional)</label>
+        <input type="text" name="business_type"
+               value="{{ (site.business_type or '') if site else '' }}"
+               placeholder="e.g. SaaS, local services, e-commerce">
+      </p>
+
+      <p class="muted" style="margin:1rem 0 0.3rem;">
+        Profile flags decide which conditional audit categories apply:
+      </p>
+      <p><label class="check"><input type="checkbox" name="is_local" value="true"
+        {% if site and site.is_local %}checked{% endif %}> Local business (enables local SEO checks)</label></p>
+      <p><label class="check"><input type="checkbox" name="is_multilingual" value="true"
+        {% if site and site.is_multilingual %}checked{% endif %}> Multilingual / multi-region (enables hreflang checks)</label></p>
+      <p><label class="check"><input type="checkbox" name="is_ymyl" value="true"
+        {% if site and site.is_ymyl %}checked{% endif %}> YMYL — money / health / safety (raises the trust bar)</label></p>
+
+      <p><button type="submit">{{ 'Save changes' if site else 'Add site' }}</button></p>
+    </form>
+  </div>
+
+  {% if site %}
+    <div class="card">
+      <h3>Connections</h3>
+      {% if site.connections %}
+        <ul>
+          {% for c in site.connections %}<li>{{ c.source_type }} — {{ c.status }}</li>{% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">No data connections yet. Search Console, GA4, Ahrefs and Screaming
+          Frog connectors are set up here once built; until then every audit runs
+          outside-in and says what connecting would add.</p>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}
