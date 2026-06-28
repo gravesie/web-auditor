@@ -37,3 +37,7 @@ target-version = "py313"
 select = ["E", "F", "I", "UP", "B"]
 # Depends(...) in FastAPI argument defaults is idiomatic, not the B008 footgun.
 ignore = ["B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

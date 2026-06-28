@@ -66,3 +66,13 @@ docker-compose.yml Postgres
 alembic revision --autogenerate -m "describe the change"
 alembic upgrade head
 ```
+
+## Tests
+
+```sh
+pytest
+```
+
+The suite is offline and deterministic (no network or credentials): it covers the
+scoring engine, the audit modules against synthetic acquisition data, and the
+parsing / graceful-degradation logic.
