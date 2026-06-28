@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import re
 
+from pydantic import BaseModel
+
 from app import scoring
 from app.acquisition.crawler import CrawledPage
 from app.acquisition.fetcher import Acquisition
@@ -25,6 +27,7 @@ from app.audits.base import (
     CategoryResult,
     CheckResult,
 )
+from app.llm import client as llm
 from app.models.enums import DetectionTag, FindingStatus, Severity
 
 _OBS = DetectionTag.observed
@@ -77,6 +80,41 @@ _BOOKING_RE = re.compile(r"calendly|cal\.com|acuity|savvycal|book(?:ing)?", re.I
 
 def _text(html: str) -> str:
     return _TAG_RE.sub(" ", html)
+
+
+class _ClarityAssessment(BaseModel):
+    score: int
+    summary: str
+
+
+_CLARITY_SYSTEM = (
+    "You assess a website homepage for positioning clarity. Within five seconds, could "
+    "a first-time visitor tell what the business does and who it is for? Return a score "
+    "0-100 (100 = instantly clear; 0 = vague or confusing) and a one-sentence summary. "
+    "Be critical and concise."
+)
+
+
+def _clarity_llm_check(text: str) -> CheckResult:
+    """LLM judgement of the five-second clarity test, or the needs-LLM note."""
+    result = llm.assess(_CLARITY_SYSTEM, text[:6000], _ClarityAssessment)
+    if result is None:
+        return CheckResult(
+            "clarity_judgement", None, FindingStatus.info, Severity.info, _NEEDS,
+            value="the five-second clarity judgement needs the LLM pass (set an Anthropic key)",
+        )
+    score = max(0.0, min(100.0, float(result.score)))
+    return CheckResult(
+        "clarity_judgement",
+        score,
+        FindingStatus.passed if score >= 70 else FindingStatus.warn,
+        Severity.medium,
+        _INF,
+        value=f"clarity assessment: {result.summary[:160]}",
+        recommendation=(
+            None if score >= 70 else "Make what you do and who it's for clearer, faster."
+        ),
+    )
 
 
 class MessagingAudit(AuditModule):
@@ -134,11 +172,7 @@ class MessagingAudit(AuditModule):
             recommendation="Replace generic phrasing with concrete specifics." if fillers else None,
         )
 
-        note = CheckResult(
-            "clarity_judgement", None, FindingStatus.info, Severity.info, _NEEDS,
-            value="the five-second 'what is this' judgement needs an LLM pass (later)",
-        )
-        checks = [hero, vagueness, note]
+        checks = [hero, vagueness, _clarity_llm_check(text)]
         return CategoryResult("clarity", scoring.category_score(checks), True, checks)
 
     def _value_prop(self, text: str) -> CategoryResult:

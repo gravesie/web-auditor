@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     # keyless at a lower quota.
     pagespeed_api_key: str | None = None
 
+    # Anthropic API key for the LLM pass (deepens the inferred / judgement checks).
+    # Without it, those checks degrade to their rule-based or needs-LLM behaviour.
+    anthropic_api_key: str | None = None
+    # Default per the API guidance; switch to a cheaper model here if cost matters.
+    llm_model: str = "claude-opus-4-8"
+
     # Emailed PDF report. Sent via Resend when resend_api_key is set; otherwise the
     # email is written to the outbox as a .eml file (PDF attached) to send by hand.
     # A send failure also falls back to the outbox.

@@ -15,6 +15,8 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime
 
+from pydantic import BaseModel
+
 from app import scoring
 from app.acquisition.crawler import CrawledPage
 from app.acquisition.fetcher import Acquisition
@@ -27,6 +29,7 @@ from app.audits.base import (
     CategoryResult,
     CheckResult,
 )
+from app.llm import client as llm
 from app.models.enums import DetectionTag, FindingStatus, Severity
 
 _OBS = DetectionTag.observed
@@ -74,6 +77,40 @@ _AI_PROSE_RE = [
         r"a wide range of",
     )
 ]
+
+
+class _DepthAssessment(BaseModel):
+    score: int
+    expert: bool
+    summary: str
+
+
+_DEPTH_SYSTEM = (
+    "You assess website content for an E-E-A-T audit. Judge the depth, originality "
+    "and expertise of the content. Return a score 0-100 (100 = deep, original, "
+    "expert; 0 = thin, generic, or AI-spun filler), whether it demonstrates genuine "
+    "expertise, and a one-sentence summary. Be critical and concise."
+)
+
+
+def _depth_llm_check(text: str) -> CheckResult:
+    """LLM judgement of content depth, or the needs-LLM note if the pass is unavailable."""
+    result = llm.assess(_DEPTH_SYSTEM, text[:6000], _DepthAssessment)
+    if result is None:
+        return CheckResult(
+            "depth_analysis", None, FindingStatus.info, Severity.info, _NEEDS,
+            value="genuine depth and originality need the LLM pass (set an Anthropic key)",
+        )
+    score = max(0.0, min(100.0, float(result.score)))
+    return CheckResult(
+        "depth_analysis",
+        score,
+        FindingStatus.passed if score >= 70 else FindingStatus.warn,
+        Severity.medium,
+        _INF,
+        value=f"depth assessment: {result.summary[:160]}",
+        recommendation=None if score >= 70 else "Deepen the content with original expertise.",
+    )
 
 
 def _find_link(html: str, keywords: tuple[str, ...]) -> bool:
@@ -146,11 +183,7 @@ class ContentQualityAudit(AuditModule):
                 "duplicate_content", None, FindingStatus.info, Severity.info, _OBS,
                 value="too few crawled pages to assess duplication",
             )
-        note = CheckResult(
-            "depth_analysis", None, FindingStatus.info, Severity.info, _NEEDS,
-            value="genuine depth and originality versus competitors needs an LLM pass (later)",
-        )
-        checks = [substance, duplicate, note]
+        checks = [substance, duplicate, _depth_llm_check(text)]
         return CategoryResult("depth_substance", scoring.category_score(checks), True, checks)
 
     def _authoritativeness_trust(self, dom: str, text: str) -> CategoryResult:
