@@ -10,20 +10,13 @@ from sqlalchemy.orm import Session
 from starlette.templating import Jinja2Templates
 
 from app.db import get_session
-from app.models import AuditRun, Finding, Site, SubAuditResult
-from app.runner import AUDIT_MODULES
+from app.models import AuditRun, Site
+from app.reporting.view import build_audit_view
 
 router = APIRouter()
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
-
-# Human labels for audits and their categories, taken from the registered modules.
-AUDIT_LABELS = {m.key: m.label for m in AUDIT_MODULES}
-CATEGORY_LABELS = {m.key: {c.key: c.label for c in m.categories} for m in AUDIT_MODULES}
-
-# Surface the worst findings first within a category.
-_STATUS_ORDER = {"fail": 0, "warn": 1, "pass": 2, "info": 3}
 
 
 def _latest_run(session: Session, site_id: UUID) -> AuditRun | None:
@@ -56,40 +49,7 @@ def site_detail(
         .order_by(AuditRun.started_at.desc())
     ).scalars().all()
     latest = runs[0] if runs else None
-
-    audits = []
-    if latest is not None:
-        results = session.execute(
-            select(SubAuditResult)
-            .where(SubAuditResult.run_id == latest.id)
-            .order_by(SubAuditResult.audit_key)
-        ).scalars().all()
-        for sar in results:
-            findings = session.execute(
-                select(Finding).where(Finding.sub_audit_result_id == sar.id)
-            ).scalars().all()
-            grouped: dict[str, list[Finding]] = {}
-            for finding in findings:
-                grouped.setdefault(finding.category, []).append(finding)
-            labels = CATEGORY_LABELS.get(sar.audit_key, {})
-            categories = [
-                {
-                    "key": key,
-                    "label": labels.get(key, key),
-                    "findings": sorted(items, key=lambda f: _STATUS_ORDER.get(str(f.status), 9)),
-                }
-                for key, items in grouped.items()
-            ]
-            audits.append(
-                {
-                    "key": sar.audit_key,
-                    "label": AUDIT_LABELS.get(sar.audit_key, sar.audit_key),
-                    "score": sar.score,
-                    "completeness": sar.completeness,
-                    "weighted": sar.weighted_contribution,
-                    "categories": categories,
-                }
-            )
+    audits = build_audit_view(session, latest) if latest is not None else []
 
     return templates.TemplateResponse(
         request,

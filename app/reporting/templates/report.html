@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", system-ui, sans-serif; color: #1d2433; font-size: 12px;
+         margin: 0; }
+  h1 { font-size: 20px; margin: 0 0 2px; }
+  h2 { font-size: 14px; margin: 18px 0 6px; padding-bottom: 4px; border-bottom: 2px solid #e5e7eb; }
+  h3 { font-size: 12px; margin: 10px 0 3px; color: #374151; }
+  .muted { color: #6b7280; }
+  .head { border-bottom: 3px solid #1d4ed8; padding-bottom: 10px; margin-bottom: 6px; }
+  .sitescore { font-size: 34px; font-weight: 700; }
+  .pill { display: inline-block; min-width: 34px; text-align: center; font-weight: 700;
+          color: #fff; border-radius: 4px; padding: 1px 7px; }
+  .good { background: #15803d; } .ok { background: #b45309; } .bad { background: #b91c1c; }
+  .na { background: #9ca3af; }
+  table { width: 100%; border-collapse: collapse; }
+  .aud td { padding: 4px 6px; border-bottom: 1px solid #eee; vertical-align: top; }
+  .badge { font-size: 9px; font-weight: 700; text-transform: uppercase; border-radius: 8px;
+           padding: 1px 5px; }
+  .b-pass { color: #15803d; background: #dcfce7; } .b-warn { color: #b45309; background: #fef3c7; }
+  .b-fail { color: #b91c1c; background: #fee2e2; } .b-info { color: #475569; background: #f1f5f9; }
+  .tag { font-size: 9px; color: #6b7280; border: 1px solid #e5e7eb; border-radius: 3px; padding: 0 4px; }
+  .rec { color: #6b7280; font-size: 11px; }
+  .cat { page-break-inside: avoid; }
+  .audit { page-break-inside: avoid; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+{% macro band(score) -%}
+  {%- if score is none -%}na{%- elif score >= 75 -%}good{%- elif score >= 50 -%}ok{%- else -%}bad{%- endif -%}
+{%- endmacro %}
+{% macro num(score) -%}{%- if score is none -%}n/a{%- else -%}{{ '%.0f'|format(score) }}{%- endif -%}{%- endmacro %}
+
+<div class="head">
+  <h1>Website audit: {{ site.name or site.domain }}</h1>
+  <div class="muted">{{ site.domain }} · run {{ run.started_at.strftime('%d %b %Y %H:%M') }}
+    · generated {{ generated.strftime('%d %b %Y') }}</div>
+  <div style="margin-top:8px;">
+    <span class="sitescore">{{ num(run.site_score) }}</span>
+    <span class="muted">/ 100 overall</span>
+  </div>
+</div>
+
+<h2>Audit scores</h2>
+<table>
+  {% for audit in audits %}
+    <tr>
+      <td style="padding:3px 0;"><span class="pill {{ band(audit.score) }}">{{ num(audit.score) }}</span></td>
+      <td style="padding:3px 8px;">{{ audit.label }}</td>
+      <td style="padding:3px 0;" class="muted">completeness {{ '%.0f'|format((audit.completeness or 0) * 100) }}%</td>
+    </tr>
+  {% endfor %}
+</table>
+
+{% for audit in audits %}
+  <div class="audit">
+    <h2>{{ audit.label }} — <span class="pill {{ band(audit.score) }}">{{ num(audit.score) }}</span></h2>
+    {% for cat in audit.categories %}
+      <div class="cat">
+        <h3>{{ cat.label }}</h3>
+        <table class="aud">
+          {% for f in cat.findings %}
+            <tr>
+              <td style="width:42px;"><span class="badge b-{{ f.status }}">{{ f.status }}</span></td>
+              <td>
+                <strong>{{ f.check_key }}</strong> <span class="tag">{{ f.detection_tag }}</span><br>
+                {{ f.value }}
+                {% if f.recommendation %}<div class="rec">&rarr; {{ f.recommendation }}</div>{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </table>
+      </div>
+    {% endfor %}
+  </div>
+{% endfor %}
+
+</body>
+</html>

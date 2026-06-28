@@ -139,6 +139,7 @@ def _summary(
 ) -> dict:
     return {
         "domain": domain,
+        "run_id": str(run.id),
         "final_url": acq.final_url,
         "status_code": acq.status_code,
         "error": acq.error,
