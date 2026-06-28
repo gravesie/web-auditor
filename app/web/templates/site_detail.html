@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import score_bar %}
+{% from "_macros.html" import score_bar, delta_badge %}
 {% block title %}{{ site.domain }} — Web Auditor{% endblock %}
 {% block content %}
   <p><a href="/">&larr; All sites</a></p>
@@ -8,16 +8,32 @@
   {% if latest %}
     <div class="card">
       <div style="font-size:1.1rem;">Site score: {{ score_bar(latest.site_score) }}
-        <span class="muted">/ 100</span></div>
+        <span class="muted">/ 100</span> {{ delta_badge(site_delta) }}</div>
       <p class="muted" style="margin-bottom:0;">
         Run {{ latest.started_at.strftime('%Y-%m-%d %H:%M') }} · status {{ latest.status }}
+        {% if site_delta is not none %}· change vs previous run{% endif %}
       </p>
     </div>
+
+    {% if changed_findings %}
+      <div class="card">
+        <h3>Changes since last run</h3>
+        {% for c in changed_findings %}
+          <div class="finding">
+            <span class="badge b-{{ c.from }}">{{ c.from }}</span>
+            <span class="muted">&rarr;</span>
+            <span class="badge b-{{ c.to }}">{{ c.to }}</span>
+            <strong>{{ c.check }}</strong> <span class="muted">({{ c.audit }})</span>
+            {% if c.value %}<div class="muted">{{ c.value }}</div>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
 
     {% for audit in audits %}
       <div class="card">
         <h3 style="display:flex; justify-content:space-between; align-items:center;">
-          <span>{{ audit.label }}</span>
+          <span>{{ audit.label }} {{ delta_badge(audit.delta) }}</span>
           <span>{{ score_bar(audit.score) }}
             <span class="muted" style="font-weight:400; font-size:0.8rem;">
               completeness {{ '%.0f'|format((audit.completeness or 0) * 100) }}%</span>
@@ -41,16 +57,17 @@
       </div>
     {% endfor %}
 
-    {% if runs | length > 1 %}
+    {% if run_rows | length > 1 %}
       <div class="card">
         <h3>Run history</h3>
         <table>
-          <thead><tr><th>When</th><th>Score</th></tr></thead>
+          <thead><tr><th>When</th><th>Score</th><th>Change</th></tr></thead>
           <tbody>
-            {% for r in runs %}
+            {% for row in run_rows %}
               <tr>
-                <td class="muted">{{ r.started_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                <td>{{ score_bar(r.site_score) }}</td>
+                <td class="muted">{{ row.run.started_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>{{ score_bar(row.run.site_score) }}</td>
+                <td>{{ delta_badge(row.delta) }}</td>
               </tr>
             {% endfor %}
           </tbody>

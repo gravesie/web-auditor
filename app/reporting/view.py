@@ -57,3 +57,60 @@ def build_audit_view(session: Session, run: AuditRun) -> list[dict]:
             }
         )
     return audits
+
+
+def _run_index(session: Session, run: AuditRun) -> tuple[dict, dict]:
+    """For a run, map audit_key -> score and (audit, category, check) -> status string."""
+    scores: dict[str, float | None] = {}
+    statuses: dict[tuple[str, str, str], str] = {}
+    results = session.execute(
+        select(SubAuditResult).where(SubAuditResult.run_id == run.id)
+    ).scalars().all()
+    for sar in results:
+        scores[sar.audit_key] = sar.score
+        findings = session.execute(
+            select(Finding).where(Finding.sub_audit_result_id == sar.id)
+        ).scalars().all()
+        for finding in findings:
+            statuses[(sar.audit_key, finding.category, finding.check_key)] = str(finding.status)
+    return scores, statuses
+
+
+_STATUS_RANK = {"fail": 0, "warn": 1, "pass": 2, "info": 3}
+
+
+def compare_audits(audits: list[dict], prev_scores: dict, prev_statuses: dict) -> dict:
+    """Pure comparison: annotate each audit with a score 'delta' and collect status changes.
+
+    prev_scores maps audit_key -> score; prev_statuses maps (audit, category, check) ->
+    status string. Regressions (moving toward fail) sort first in changed_findings.
+    """
+    changed: list[dict] = []
+    for audit in audits:
+        prev = prev_scores.get(audit["key"])
+        current = audit["score"]
+        audit["delta"] = current - prev if (prev is not None and current is not None) else None
+        for category in audit["categories"]:
+            for finding in category["findings"]:
+                key = (audit["key"], category["key"], finding.check_key)
+                old = prev_statuses.get(key)
+                new = str(finding.status)
+                if old is not None and old != new:
+                    changed.append(
+                        {
+                            "audit": audit["label"],
+                            "check": finding.check_key,
+                            "from": old,
+                            "to": new,
+                            "value": finding.value,
+                            "_rank": _STATUS_RANK.get(new, 9) - _STATUS_RANK.get(old, 9),
+                        }
+                    )
+    changed.sort(key=lambda c: c["_rank"])
+    return {"changed_findings": changed}
+
+
+def build_comparison(session: Session, audits: list[dict], previous: AuditRun) -> dict:
+    """Compare the current per-audit view against a previous run (DB-backed wrapper)."""
+    prev_scores, prev_statuses = _run_index(session, previous)
+    return compare_audits(audits, prev_scores, prev_statuses)

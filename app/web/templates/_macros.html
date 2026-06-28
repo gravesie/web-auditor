@@ -7,3 +7,14 @@
     <span class="score">{{ '%.0f'|format(score) }}</span>
   {%- endif -%}
 {%- endmacro %}
+
+{% macro delta_badge(delta) -%}
+  {%- if delta is none -%}
+  {%- elif delta >= 0.5 -%}
+    <span class="delta up">&#9650; +{{ '%.0f'|format(delta) }}</span>
+  {%- elif delta <= -0.5 -%}
+    <span class="delta down">&#9660; {{ '%.0f'|format(delta) }}</span>
+  {%- else -%}
+    <span class="delta flat">no change</span>
+  {%- endif -%}
+{%- endmacro %}

@@ -11,7 +11,7 @@ from starlette.templating import Jinja2Templates
 
 from app.db import get_session
 from app.models import AuditRun, Site
-from app.reporting.view import build_audit_view
+from app.reporting.view import build_audit_view, build_comparison
 
 router = APIRouter()
 
@@ -49,10 +49,36 @@ def site_detail(
         .order_by(AuditRun.started_at.desc())
     ).scalars().all()
     latest = runs[0] if runs else None
+    previous = runs[1] if len(runs) > 1 else None
     audits = build_audit_view(session, latest) if latest is not None else []
+
+    site_delta = None
+    changed_findings: list[dict] = []
+    if latest is not None and previous is not None:
+        changed_findings = build_comparison(session, audits, previous)["changed_findings"]
+        if latest.site_score is not None and previous.site_score is not None:
+            site_delta = latest.site_score - previous.site_score
+
+    # Run history with each run's delta against the next-older run.
+    run_rows = []
+    for index, run in enumerate(runs):
+        older = runs[index + 1] if index + 1 < len(runs) else None
+        delta = (
+            run.site_score - older.site_score
+            if older is not None and run.site_score is not None and older.site_score is not None
+            else None
+        )
+        run_rows.append({"run": run, "delta": delta})
 
     return templates.TemplateResponse(
         request,
         "site_detail.html",
-        {"site": site, "latest": latest, "runs": runs, "audits": audits},
+        {
+            "site": site,
+            "latest": latest,
+            "audits": audits,
+            "site_delta": site_delta,
+            "changed_findings": changed_findings,
+            "run_rows": run_rows,
+        },
     )
