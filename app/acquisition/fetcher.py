@@ -38,6 +38,15 @@ SENSITIVE_PATHS = ["/.git/config", "/.env"]
 
 
 @dataclass
+class SitemapProbe:
+    """Result of a passive status check on one sitemap URL."""
+
+    url: str
+    status: int | None
+    redirected: bool
+
+
+@dataclass
 class Acquisition:
     requested_url: str
     final_url: str | None = None
@@ -52,7 +61,9 @@ class Acquisition:
     tls_days_left: int | None = None
     robots_txt: str | None = None
     sitemap_url: str | None = None
+    sitemap_is_index: bool = False
     sitemap_locs: list[str] = field(default_factory=list)
+    sitemap_sample: list[SitemapProbe] = field(default_factory=list)
     exposed_paths: dict[str, int] = field(default_factory=dict)
     error: str | None = None
 
@@ -103,12 +114,32 @@ def _https_enforced(host: str) -> bool | None:
 
 _SITEMAP_IN_ROBOTS = re.compile(r"(?im)^\s*sitemap:\s*(\S+)")
 _LOC_RE = re.compile(r"<loc>\s*([^<\s]+)\s*</loc>", re.I)
+_SITEMAPINDEX_RE = re.compile(r"<sitemapindex", re.I)
+
+# Bounds: how many child sitemaps to follow from an index, how many page URLs to
+# keep, and how many of those to status-check. All passive GET/HEAD requests.
+MAX_SITEMAP_CHILDREN = 50
+MAX_SITEMAP_LOCS = 2000
+SITEMAP_SAMPLE = 25
+
+
+def _parse_sitemap(text: str) -> tuple[bool, list[str]]:
+    """Parse sitemap XML into (is_index, <loc> URLs).
+
+    When is_index is True the URLs point to child sitemaps, not pages.
+    """
+    is_index = bool(_SITEMAPINDEX_RE.search(text))
+    return is_index, _LOC_RE.findall(text)
 
 
 def _fetch_sitemap(
     client: httpx.Client, host: str, robots_txt: str | None
-) -> tuple[str, list[str]]:
-    """Locate the sitemap (from robots.txt or the default path) and parse its <loc> URLs."""
+) -> tuple[str, bool, list[str]]:
+    """Locate the sitemap and return (url, is_index, page URLs).
+
+    A sitemap index is followed one level: each child sitemap is fetched and its
+    page URLs collected, so the page list is real pages rather than child files.
+    """
     url = None
     if robots_txt:
         match = _SITEMAP_IN_ROBOTS.search(robots_txt)
@@ -119,10 +150,51 @@ def _fetch_sitemap(
     try:
         resp = client.get(url)
     except httpx.HTTPError:
-        return url, []
-    if resp.status_code == 200 and ("<urlset" in resp.text or "<sitemapindex" in resp.text):
-        return url, _LOC_RE.findall(resp.text)[:2000]
-    return url, []
+        return url, False, []
+    if resp.status_code != 200 or not ("<urlset" in resp.text or "<sitemapindex" in resp.text):
+        return url, False, []
+
+    is_index, locs = _parse_sitemap(resp.text)
+    if not is_index:
+        return url, False, locs[:MAX_SITEMAP_LOCS]
+
+    pages: list[str] = []
+    for child in locs[:MAX_SITEMAP_CHILDREN]:
+        try:
+            child_resp = client.get(child)
+        except httpx.HTTPError:
+            continue
+        if child_resp.status_code == 200:
+            _, child_locs = _parse_sitemap(child_resp.text)
+            pages.extend(child_locs)
+        if len(pages) >= MAX_SITEMAP_LOCS:
+            break
+    return url, True, pages[:MAX_SITEMAP_LOCS]
+
+
+def _probe_sitemap_urls(
+    client: httpx.Client, locs: list[str], sample: int = SITEMAP_SAMPLE
+) -> list[SitemapProbe]:
+    """Status-check a spread sample of sitemap URLs to find dead or redirecting entries.
+
+    Samples evenly across the list (not just the first N) so a stale tail is caught.
+    Uses HEAD where the server allows it, falling back to GET.
+    """
+    if not locs:
+        return []
+    step = max(1, len(locs) // sample)
+    chosen = locs[::step][:sample]
+    probes: list[SitemapProbe] = []
+    for loc in chosen:
+        try:
+            resp = client.head(loc, follow_redirects=True)
+            if resp.status_code in (403, 405, 501):
+                resp = client.get(loc, follow_redirects=True)
+            redirected = str(resp.url).rstrip("/") != loc.rstrip("/")
+            probes.append(SitemapProbe(loc, resp.status_code, redirected))
+        except httpx.HTTPError:
+            probes.append(SitemapProbe(loc, None, False))
+    return probes
 
 
 def fetch(domain: str) -> Acquisition:
@@ -150,7 +222,10 @@ def fetch(domain: str) -> Acquisition:
             except httpx.HTTPError:
                 pass
 
-            acq.sitemap_url, acq.sitemap_locs = _fetch_sitemap(client, host, acq.robots_txt)
+            acq.sitemap_url, acq.sitemap_is_index, acq.sitemap_locs = _fetch_sitemap(
+                client, host, acq.robots_txt
+            )
+            acq.sitemap_sample = _probe_sitemap_urls(client, acq.sitemap_locs)
 
             for path in SENSITIVE_PATHS:
                 try:
