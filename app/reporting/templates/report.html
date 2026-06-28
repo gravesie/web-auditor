@@ -41,12 +41,12 @@
 
 <div class="masthead">
   {{ logo_svg | safe }}
-  <span class="kicker">Website Audit</span>
+  <span class="kicker">Goyande AI Website Audit</span>
 </div>
 
 <div class="head">
-  <h1>Website audit: {{ site.name or site.domain }}</h1>
-  <div class="muted">{{ site.domain }} · run {{ run.started_at.strftime('%d %b %Y %H:%M') }}
+  <h1>{{ site.name or site.domain }}</h1>
+  <div class="muted">audited {{ run.started_at.strftime('%d %b %Y %H:%M') }}
     · generated {{ generated.strftime('%d %b %Y') }}</div>
   <div style="margin-top:8px;">
     <span class="sitescore">{{ num(run.site_score) }}</span>
