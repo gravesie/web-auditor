@@ -27,5 +27,15 @@ class Settings(BaseSettings):
     # keyless at a lower quota.
     pagespeed_api_key: str | None = None
 
+    # Emailed PDF report. Sent via Resend when resend_api_key is set; otherwise the
+    # email is written to the outbox as a .eml file (PDF attached) to send by hand.
+    # A send failure also falls back to the outbox.
+    resend_api_key: str | None = None
+    # From must be a Resend-verified domain. Until pggi.co.uk is verified, use
+    # Resend's test sender. recipient is the default; per-user addresses come later.
+    email_from: str = "Web Auditor <onboarding@resend.dev>"
+    email_to: str = "admin@pggi.co.uk"
+    outbox_dir: str = "outbox"
+
 
 settings = Settings()

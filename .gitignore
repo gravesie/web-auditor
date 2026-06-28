@@ -16,6 +16,9 @@ node_modules/
 *.db
 *.sqlite3
 
+# Generated report emails / PDFs
+outbox/
+
 # OS
 .DS_Store
 Thumbs.db
