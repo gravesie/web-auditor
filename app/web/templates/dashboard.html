@@ -2,7 +2,9 @@
 {% from "_macros.html" import score_bar %}
 {% block title %}Dashboard — Web Auditor{% endblock %}
 {% block content %}
-  <h2>Sites</h2>
+  <h2 style="display:flex; justify-content:space-between; align-items:center;">
+    Sites <a href="/sites/new" style="font-size:0.85rem;">+ Add site</a>
+  </h2>
   {% if rows %}
     <div class="card">
       <table>
