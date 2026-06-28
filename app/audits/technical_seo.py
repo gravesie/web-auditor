@@ -12,10 +12,11 @@ Search Console and reports as needs-connection rather than relying on `site:`.
 from __future__ import annotations
 
 import re
+from urllib.parse import urlsplit
 
 from app import scoring
 from app.acquisition.crawler import CrawledPage
-from app.acquisition.fetcher import Acquisition
+from app.acquisition.fetcher import Acquisition, SitemapProbe
 from app.acquisition.render import RenderResult
 from app.audits.base import (
     AuditContext,
@@ -79,6 +80,107 @@ def _blocks_everything(robots_txt: str) -> bool:
             if low.split(":", 1)[1].strip() == "/":
                 return True
     return False
+
+
+def _normalise_url(url: str) -> str:
+    """Reduce a URL to host + path (+ query) for set comparison.
+
+    Scheme is dropped so http/https don't count as different pages, and a trailing
+    slash is removed so /about and /about/ match. The fragment is ignored.
+    """
+    try:
+        parts = urlsplit(url.strip())
+    except ValueError:
+        return url.strip().lower()
+    host = (parts.hostname or "").lower()
+    path = parts.path or "/"
+    if len(path) > 1:
+        path = path.rstrip("/")
+    base = f"{host}{path}"
+    return f"{base}?{parts.query}" if parts.query else base
+
+
+def _sitemap_coverage(sitemap_locs: list[str], pages: list[CrawledPage]) -> CheckResult | None:
+    """Crawled pages that the sitemap leaves out (the sitemap is stale or incomplete).
+
+    Measured against the pages the crawl actually reached, which is a bounded set, so
+    this reports coverage of discovered pages rather than the whole site.
+    """
+    if not sitemap_locs:
+        return None
+    in_sitemap = {_normalise_url(u) for u in sitemap_locs}
+    crawled = {_normalise_url(p.url) for p in pages if p.status == 200 and p.url}
+    if not crawled:
+        return None
+
+    missing = sorted(crawled - in_sitemap)
+    covered = len(crawled) - len(missing)
+    ratio = covered / len(crawled)
+    if ratio >= 0.9:
+        score, status, severity = 100.0, FindingStatus.passed, Severity.low
+    elif ratio >= 0.6:
+        score, status, severity = 70.0, FindingStatus.warn, Severity.medium
+    else:
+        score, status, severity = 40.0, FindingStatus.warn, Severity.medium
+
+    return CheckResult(
+        "sitemap_coverage",
+        score,
+        status,
+        severity,
+        _OBS,
+        value=f"{covered} of {len(crawled)} crawled pages are listed in the sitemap",
+        recommendation=(
+            None
+            if not missing
+            else "List reachable pages in the sitemap, or drop them if they are non-canonical."
+        ),
+        evidence={"missing_from_sitemap": missing[:10]} if missing else {},
+    )
+
+
+def _sitemap_health(sample: list[SitemapProbe]) -> CheckResult | None:
+    """Dead or redirecting entries in a sampled set of sitemap URLs."""
+    if not sample:
+        return None
+    dead = [p for p in sample if p.status is None or p.status >= 400]
+    redirecting = [p for p in sample if p.redirected and p.status is not None and p.status < 400]
+    healthy = len(sample) - len(dead)
+    score = healthy / len(sample) * 100
+
+    if dead:
+        status = FindingStatus.fail if score < 80 else FindingStatus.warn
+        severity = Severity.medium
+    elif redirecting:
+        status, severity = FindingStatus.warn, Severity.low
+    else:
+        status, severity = FindingStatus.passed, Severity.low
+
+    parts = []
+    if dead:
+        parts.append(f"{len(dead)} dead")
+    if redirecting:
+        parts.append(f"{len(redirecting)} redirecting")
+    detail = ", ".join(parts) if parts else "all reachable"
+    recommendation = None
+    if dead:
+        recommendation = "Remove dead URLs from the sitemap; it should list live, canonical pages."
+    elif redirecting:
+        recommendation = "List the final canonical URLs in the sitemap, not ones that redirect."
+
+    return CheckResult(
+        "sitemap_health",
+        score,
+        status,
+        severity,
+        _OBS,
+        value=f"sampled {len(sample)} sitemap URLs: {detail}",
+        recommendation=recommendation,
+        evidence={
+            "dead": [p.url for p in dead[:10]],
+            "redirecting": [p.url for p in redirecting[:10]],
+        },
+    )
 
 
 class TechnicalSeoAudit(AuditModule):
@@ -189,6 +291,11 @@ class TechnicalSeoAudit(AuditModule):
             )
 
         locs = len(acq.sitemap_locs)
+        sitemap_value = (
+            f"sitemap with {locs} URLs{' (index)' if acq.sitemap_is_index else ''}"
+            if locs
+            else "no usable XML sitemap found"
+        )
         checks.append(
             CheckResult(
                 "xml_sitemap",
@@ -196,7 +303,7 @@ class TechnicalSeoAudit(AuditModule):
                 FindingStatus.passed if locs else FindingStatus.warn,
                 Severity.medium,
                 _OBS,
-                value=f"sitemap with {locs} URLs" if locs else "no usable XML sitemap found",
+                value=sitemap_value,
                 recommendation=(
                     None if locs else "Publish an XML sitemap and reference it in robots.txt."
                 ),
@@ -205,6 +312,12 @@ class TechnicalSeoAudit(AuditModule):
 
         checks.append(self._crawl_depth(pages))
         checks.append(self._js_dependency(acq.html, dom))
+        for extra in (
+            _sitemap_coverage(acq.sitemap_locs, pages),
+            _sitemap_health(acq.sitemap_sample),
+        ):
+            if extra is not None:
+                checks.append(extra)
         return CategoryResult("crawlability", scoring.category_score(checks), True, checks)
 
     def _crawl_depth(self, pages: list[CrawledPage]) -> CheckResult:
