@@ -11,7 +11,11 @@ Run with:  python -m app.worker
 
 from __future__ import annotations
 
+import atexit
+import os
+import threading
 import time
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 
@@ -20,12 +24,18 @@ from app.models import AuditRun
 from app.models.enums import RunStatus
 from app.reporting.email import email_report
 from app.runner import execute_run
+from app.worker_control import clear_heartbeat, write_heartbeat
 
 POLL_SECONDS = 3
+HEARTBEAT_SECONDS = 5
 
 
 def _next_pending() -> tuple[str, bool] | None:
-    """The oldest pending run as (run_id, email_requested), or None if the queue is empty."""
+    """Atomically claim the oldest pending run, flipping it to running.
+
+    The row is locked FOR UPDATE SKIP LOCKED so that if two workers ever run at once
+    they can never claim the same run. Returns (run_id, email_requested) or None.
+    """
     session = SessionLocal()
     try:
         run = session.execute(
@@ -33,12 +43,32 @@ def _next_pending() -> tuple[str, bool] | None:
             .where(AuditRun.status == RunStatus.pending)
             .order_by(AuditRun.created_at)
             .limit(1)
+            .with_for_update(skip_locked=True)
         ).scalar_one_or_none()
         if run is None:
             return None
-        return str(run.id), run.email_requested
+        # Claim it within the locked transaction; execute_run re-stamps these too.
+        run.status = RunStatus.running
+        run.started_at = datetime.now(UTC)
+        claimed = (str(run.id), run.email_requested)
+        session.commit()
+        return claimed
     finally:
         session.close()
+
+
+def _start_heartbeat() -> None:
+    """Tick the heartbeat from a daemon thread so a busy worker stays 'alive'."""
+    pid = os.getpid()
+    write_heartbeat(pid)
+
+    def beat() -> None:
+        while True:
+            write_heartbeat(pid)
+            time.sleep(HEARTBEAT_SECONDS)
+
+    threading.Thread(target=beat, daemon=True).start()
+    atexit.register(clear_heartbeat)
 
 
 def process_once() -> bool:
@@ -58,9 +88,13 @@ def process_once() -> bool:
 
 def run_forever(poll_seconds: int = POLL_SECONDS) -> None:
     print("[worker] started; polling for pending runs")
-    while True:
-        if not process_once():
-            time.sleep(poll_seconds)
+    _start_heartbeat()
+    try:
+        while True:
+            if not process_once():
+                time.sleep(poll_seconds)
+    finally:
+        clear_heartbeat()
 
 
 if __name__ == "__main__":

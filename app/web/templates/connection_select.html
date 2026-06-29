@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Choose properties — {{ site.domain }}{% endblock %}
+{% block content %}
+  <p><a href="/sites/{{ site.id }}/connections">&larr; Connections</a></p>
+  <h2>Choose properties to connect <span class="muted">{{ site.domain }}</span></h2>
+  <p class="muted">Pick the Search Console property and the GA4 property for this site.
+    You can leave either blank if you only want to connect one.</p>
+
+  <form method="post" action="/connections/google/bind">
+    <input type="hidden" name="grant" value="{{ grant_blob }}">
+
+    <div class="card">
+      <h3 style="margin-top:0;">Search Console property</h3>
+      {% if gsc_sites %}
+        {% for s in gsc_sites %}
+          <p>
+            <label class="check">
+              <input type="radio" name="gsc_site" value="{{ s.siteUrl }}">
+              {{ s.siteUrl }}
+              <span class="tag">{{ s.permissionLevel }}</span>
+            </label>
+          </p>
+        {% endfor %}
+        <p><label class="check"><input type="radio" name="gsc_site" value="" checked>
+          Don't connect Search Console</label></p>
+      {% else %}
+        <p class="muted">No Search Console properties available for this Google account.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">Analytics 4 property</h3>
+      {% if ga4_properties %}
+        {% for p in ga4_properties %}
+          <p>
+            <label class="check">
+              <input type="radio" name="ga4_property" value="{{ p.id }}">
+              {{ p.name }} <span class="tag">{{ p.id }}</span>
+              <span class="muted">· {{ p.account }}</span>
+            </label>
+          </p>
+        {% endfor %}
+        <p><label class="check"><input type="radio" name="ga4_property" value="" checked>
+          Don't connect Analytics</label></p>
+      {% else %}
+        <p class="muted">No GA4 properties available for this Google account.</p>
+      {% endif %}
+    </div>
+
+    <button type="submit">Connect</button>
+  </form>
+{% endblock %}

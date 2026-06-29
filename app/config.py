@@ -43,5 +43,14 @@ class Settings(BaseSettings):
     # Model for the LLM passes. Opus 4.8 by default; override to trade cost/latency.
     llm_model: str = "claude-opus-4-8"
 
+    # Google OAuth client (Search Console + GA4 connectors). The client id/secret come
+    # from a Google Cloud OAuth 2.0 client; without them the connect flow is disabled
+    # and every audit keeps running its public/inferred path.
+    google_oauth_client_id: str | None = None
+    google_oauth_client_secret: str | None = None
+    # Must exactly match an "Authorised redirect URI" on the OAuth client in Google
+    # Cloud. Override if the app is not served on localhost:8000.
+    google_oauth_redirect_uri: str = "http://localhost:8000/connections/google/callback"
+
 
 settings = Settings()

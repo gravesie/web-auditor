@@ -24,7 +24,7 @@
                 {% endif %}
               </td>
               <td class="muted">
-                {% if row.run %}{{ row.run.started_at.strftime('%Y-%m-%d %H:%M') }}{% else %}—{% endif %}
+                {% if row.run and row.run.started_at %}{{ row.run.started_at.strftime('%Y-%m-%d %H:%M') }}{% else %}—{% endif %}
               </td>
             </tr>
           {% endfor %}

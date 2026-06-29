@@ -54,6 +54,10 @@ def build_audit_view(session: Session, run: AuditRun) -> list[dict]:
                 "completeness": sar.completeness,
                 "weighted": sar.weighted_contribution,
                 "categories": categories,
+                # Default; compare_audits() overwrites this when a previous run exists.
+                # Without it, a site's first run has no delta key and the template that
+                # renders delta_badge(audit.delta) raises.
+                "delta": None,
             }
         )
     return audits
