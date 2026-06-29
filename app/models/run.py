@@ -8,7 +8,18 @@ levels of the hierarchy. Deltas are computed by comparing runs, not stored.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +35,17 @@ from app.models.enums import (
 
 class AuditRun(IdMixin, TimestampMixin, Base):
     __tablename__ = "audit_runs"
+
+    # A site may have at most one active run at a time. Enforced with a partial
+    # unique index so concurrent enqueues cannot create duplicate active runs.
+    __table_args__ = (
+        Index(
+            "uq_audit_runs_active_per_site",
+            "site_id",
+            unique=True,
+            postgresql_where=text("status IN ('pending', 'running')"),
+        ),
+    )
 
     site_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("sites.id", ondelete="CASCADE"), index=True
