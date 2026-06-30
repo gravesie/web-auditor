@@ -31,9 +31,10 @@ class Settings(BaseSettings):
     # email is written to the outbox as a .eml file (PDF attached) to send by hand.
     # A send failure also falls back to the outbox.
     resend_api_key: str | None = None
-    # From must be a Resend-verified domain. Until pggi.co.uk is verified, use
-    # Resend's test sender. recipient is the default; per-user addresses come later.
-    email_from: str = "Web Auditor <onboarding@resend.dev>"
+    # From must be on a Resend-verified domain. updates.pggi.co.uk is verified
+    # (DKIM + SPF + DMARC), so reports send from there. The subdomain is send-only;
+    # set a Reply-To to a monitored inbox if replies are wanted later.
+    email_from: str = "Goyande AI <audits@updates.pggi.co.uk>"
     email_to: str = "admin@pggi.co.uk"
     outbox_dir: str = "outbox"
 
