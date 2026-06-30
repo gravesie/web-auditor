@@ -17,6 +17,7 @@ from app.acquisition.crawler import CrawledPage, crawl
 from app.acquisition.fetcher import Acquisition, fetch
 from app.acquisition.pagespeed import fetch_pagespeed
 from app.acquisition.render import render
+from app.audits.analytics import AnalyticsAudit
 from app.audits.base import AuditContext, AuditModule, AuditResult
 from app.audits.build_security import BuildSecurityAudit
 from app.audits.compliance import ComplianceAudit
@@ -46,6 +47,7 @@ AUDIT_MODULES: list[AuditModule] = [
     PerformanceAudit(),
     MessagingAudit(),
     GeoAudit(),
+    AnalyticsAudit(),
 ]
 
 
