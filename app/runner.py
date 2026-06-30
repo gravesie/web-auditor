@@ -32,6 +32,7 @@ from app.connectors.load import load_google_connectors
 from app.db import SessionLocal
 from app.models import AuditRun, Finding, Page, Site, SubAuditResult
 from app.models.enums import RunStatus, RunTrigger
+from app.tenancy import get_or_create_default_account
 
 # The audits to run. Grows as modules are added.
 AUDIT_MODULES: list[AuditModule] = [
@@ -65,11 +66,18 @@ def _active_run_id(session: Session, site_id: uuid.UUID) -> str | None:
     return str(run.id) if run is not None else None
 
 
-def create_pending_run(domain: str, *, email: bool = False, scheduled: bool = False) -> str:
+def create_pending_run(
+    domain: str,
+    *,
+    account_id: uuid.UUID | None = None,
+    email: bool = False,
+    scheduled: bool = False,
+) -> str:
     """Create a pending run for a domain (creating the site if needed). Returns the run id.
 
     This is the enqueue step: the web request / scheduler calls it, then the worker
-    picks the pending run up and executes it.
+    picks the pending run up and executes it. The site is scoped to an account; when
+    no account is given (CLI, scheduler) it falls to the default account.
 
     Single-flight: a site may have only one active (pending or running) run at a
     time. If one already exists we reuse it instead of queueing a duplicate, so
@@ -80,9 +88,11 @@ def create_pending_run(domain: str, *, email: bool = False, scheduled: bool = Fa
     """
     session = SessionLocal()
     try:
-        site = session.query(Site).filter_by(domain=domain).one_or_none()
+        if account_id is None:
+            account_id = get_or_create_default_account(session).id
+        site = session.query(Site).filter_by(account_id=account_id, domain=domain).one_or_none()
         if site is None:
-            site = Site(domain=domain)
+            site = Site(account_id=account_id, domain=domain)
             session.add(site)
             session.flush()
 

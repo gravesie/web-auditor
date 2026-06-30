@@ -3,7 +3,15 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, IdMixin, TimestampMixin
@@ -15,7 +23,14 @@ class Site(IdMixin, TimestampMixin, Base):
 
     __tablename__ = "sites"
 
-    domain: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    # A domain is unique within an account, not globally: two accounts may each audit
+    # the same domain as separate sites with their own connections.
+    __table_args__ = (UniqueConstraint("account_id", "domain", name="uq_sites_account_domain"),)
+
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("accounts.id", ondelete="CASCADE"), index=True
+    )
+    domain: Mapped[str] = mapped_column(String(255), index=True)
     name: Mapped[str | None] = mapped_column(String(255))
     business_type: Mapped[str | None] = mapped_column(String(100))
 
@@ -24,6 +39,7 @@ class Site(IdMixin, TimestampMixin, Base):
     is_multilingual: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     is_ymyl: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
+    account: Mapped["Account"] = relationship(back_populates="sites")  # noqa: F821
     connections: Mapped[list["Connection"]] = relationship(
         back_populates="site", cascade="all, delete-orphan"
     )

@@ -11,10 +11,11 @@ from sqlalchemy.orm import Session
 from starlette.templating import Jinja2Templates
 
 from app.db import get_session
-from app.models import AuditRun, Site
+from app.models import Account, AuditRun, Site
 from app.models.enums import RunStatus
 from app.reporting.view import build_audit_view, build_comparison
 from app.runner import create_pending_run
+from app.tenancy import get_current_account, owned_site
 from app.worker_control import ensure_worker, worker_status
 
 router = APIRouter()
@@ -50,8 +51,20 @@ def _normalise_domain(raw: str) -> str:
 
 
 @router.get("/", response_class=HTMLResponse)
-def dashboard(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
-    sites = session.execute(select(Site).order_by(Site.created_at.desc())).scalars().all()
+def dashboard(
+    request: Request,
+    session: Session = Depends(get_session),
+    account: Account = Depends(get_current_account),
+) -> HTMLResponse:
+    sites = (
+        session.execute(
+            select(Site)
+            .where(Site.account_id == account.id)
+            .order_by(Site.created_at.desc())
+        )
+        .scalars()
+        .all()
+    )
     rows = [{"site": site, "run": _latest_completed_run(session, site.id)} for site in sites]
     return templates.TemplateResponse(request, "dashboard.html", {"rows": rows})
 
@@ -73,6 +86,7 @@ def create_site(
     is_multilingual: bool = Form(False),
     is_ymyl: bool = Form(False),
     session: Session = Depends(get_session),
+    account: Account = Depends(get_current_account),
 ):
     host = _normalise_domain(domain)
     if not host:
@@ -81,6 +95,7 @@ def create_site(
             status_code=400,
         )
     site = Site(
+        account_id=account.id,
         domain=host,
         name=name or None,
         business_type=business_type or None,
@@ -103,9 +118,12 @@ def create_site(
 
 @router.get("/sites/{site_id}/edit", response_class=HTMLResponse)
 def edit_site_form(
-    site_id: UUID, request: Request, session: Session = Depends(get_session)
+    site_id: UUID,
+    request: Request,
+    session: Session = Depends(get_session),
+    account: Account = Depends(get_current_account),
 ) -> HTMLResponse:
-    site = session.get(Site, site_id)
+    site = owned_site(session, site_id, account.id)
     if site is None:
         return HTMLResponse("Site not found", status_code=404)
     return templates.TemplateResponse(request, "site_form.html", {"site": site, "error": None})
@@ -121,8 +139,9 @@ def update_site(
     is_multilingual: bool = Form(False),
     is_ymyl: bool = Form(False),
     session: Session = Depends(get_session),
+    account: Account = Depends(get_current_account),
 ):
-    site = session.get(Site, site_id)
+    site = owned_site(session, site_id, account.id)
     if site is None:
         return HTMLResponse("Site not found", status_code=404)
     site.name = name or None
@@ -135,11 +154,15 @@ def update_site(
 
 
 @router.post("/sites/{site_id}/run")
-def run_site(site_id: UUID, session: Session = Depends(get_session)):
-    site = session.get(Site, site_id)
+def run_site(
+    site_id: UUID,
+    session: Session = Depends(get_session),
+    account: Account = Depends(get_current_account),
+):
+    site = owned_site(session, site_id, account.id)
     if site is None:
         return HTMLResponse("Site not found", status_code=404)
-    create_pending_run(site.domain)  # queued
+    create_pending_run(site.domain, account_id=account.id)  # queued
     ensure_worker()  # make sure something is there to execute it
     return RedirectResponse(url=f"/sites/{site_id}", status_code=303)
 
@@ -161,8 +184,13 @@ def start_worker(request: Request) -> HTMLResponse:
 
 @router.get("/sites/{site_id}/status", response_class=HTMLResponse)
 def site_status(
-    site_id: UUID, request: Request, session: Session = Depends(get_session)
+    site_id: UUID,
+    request: Request,
+    session: Session = Depends(get_session),
+    account: Account = Depends(get_current_account),
 ) -> HTMLResponse:
+    if owned_site(session, site_id, account.id) is None:
+        return HTMLResponse("Site not found", status_code=404)
     run = _latest_run(session, site_id)
     return templates.TemplateResponse(
         request, "_run_status.html", {"site_id": site_id, "run": run}
@@ -171,9 +199,12 @@ def site_status(
 
 @router.get("/sites/{site_id}", response_class=HTMLResponse)
 def site_detail(
-    site_id: UUID, request: Request, session: Session = Depends(get_session)
+    site_id: UUID,
+    request: Request,
+    session: Session = Depends(get_session),
+    account: Account = Depends(get_current_account),
 ) -> HTMLResponse:
-    site = session.get(Site, site_id)
+    site = owned_site(session, site_id, account.id)
     if site is None:
         return HTMLResponse("Site not found", status_code=404)
 
