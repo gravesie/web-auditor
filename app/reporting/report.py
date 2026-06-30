@@ -17,7 +17,7 @@ from playwright.sync_api import sync_playwright
 from app import __version__
 from app.db import SessionLocal
 from app.models import AuditRun, Site
-from app.reporting.view import build_audit_view
+from app.reporting.view import build_action_list, build_audit_view
 
 _TEMPLATES = Path(__file__).parent / "templates"
 _ASSETS = Path(__file__).parent / "assets"
@@ -62,8 +62,14 @@ def generate_report(run_id) -> Report:
             raise ValueError(f"audit run {run_id} not found")
         site = session.get(Site, run.site_id)
         audits = build_audit_view(session, run)
+        action_list = build_action_list(session, run)
         html = _env.get_template("report.html").render(
-            site=site, run=run, audits=audits, generated=datetime.now(UTC), logo_svg=_LOGO_SVG
+            site=site,
+            run=run,
+            audits=audits,
+            action_list=action_list,
+            generated=datetime.now(UTC),
+            logo_svg=_LOGO_SVG,
         )
         domain = site.domain
         score = run.site_score

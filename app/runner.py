@@ -33,6 +33,7 @@ from app.db import SessionLocal
 from app.models import AuditRun, Finding, Page, Site, SubAuditResult
 from app.models.enums import RunStatus, RunTrigger
 from app.tenancy import get_or_create_default_account
+from app.weighting import weighted_site_score
 
 # The audits to run. Grows as modules are added.
 AUDIT_MODULES: list[AuditModule] = [
@@ -222,13 +223,14 @@ def execute_run(run_id: str | uuid.UUID) -> dict:
                     )
             results.append((result, sar))
 
-        # Site score is the mean of the audits that produced a score; audits that
-        # could not be assessed (score None) are excluded and the share rebalanced.
-        scored = [r.score for r, _ in results if r.score is not None]
-        run.site_score = sum(scored) / len(scored) if scored else None
-        share = 1.0 / len(scored) if scored else 0.0
+        # Site score is the commercially weighted mean of the audits that produced a
+        # score; unscored audits (score None) are excluded and the weights rebalanced.
+        site_score, contributions = weighted_site_score(
+            [(r.audit_key, r.score) for r, _ in results]
+        )
+        run.site_score = site_score
         for result, sar in results:
-            sar.weighted_contribution = result.score * share if result.score is not None else None
+            sar.weighted_contribution = contributions.get(result.audit_key)
 
         run.status = RunStatus.complete
         run.finished_at = datetime.now(UTC)
