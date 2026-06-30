@@ -24,6 +24,7 @@ from app.audits.performance import PerformanceAudit
 from app.audits.schema import SchemaAudit
 from app.audits.technical_seo import TechnicalSeoAudit
 from app.config import settings
+from app.connectors.load import load_google_connectors
 from app.db import SessionLocal
 from app.models import AuditRun, Finding, Page, Site, SubAuditResult
 from app.models.enums import RunStatus, RunTrigger
@@ -104,6 +105,11 @@ def execute_run(run_id: str | uuid.UUID) -> dict:
             acq.final_url or domain, settings.pagespeed_api_key, strategy="mobile"
         )
 
+        # Live connectors (Search Console, GA4) when the site has them. Failures here
+        # degrade to the public path; they never break the run.
+        connectors = load_google_connectors(session, site)
+        session.commit()
+
         context = AuditContext(
             site_domain=domain,
             data={
@@ -112,6 +118,7 @@ def execute_run(run_id: str | uuid.UUID) -> dict:
                 "render": rendered,
                 "pagespeed": pagespeed,
             },
+            connectors=connectors,
         )
 
         results: list[tuple[AuditResult, SubAuditResult]] = []

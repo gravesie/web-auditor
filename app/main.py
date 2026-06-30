@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.db import engine
+from app.web.connections import router as connections_router
 from app.web.routes import router as web_router
 
 app = FastAPI(title="Web Auditor", version="0.1.0")
@@ -27,3 +28,4 @@ def health() -> dict[str, str]:
 
 
 app.include_router(web_router)
+app.include_router(connections_router)

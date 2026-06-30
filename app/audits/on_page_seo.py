@@ -74,6 +74,76 @@ def _score_length(value: int, low: int, high: int) -> tuple[float, FindingStatus
     return 60.0, FindingStatus.warn
 
 
+def _ranking_checks_from_gsc(gsc: dict) -> list[CheckResult]:
+    """Scored ranking checks from live Search Console data (observed)."""
+    clicks = int(gsc.get("total_clicks", 0) or 0)
+    impressions = int(gsc.get("total_impressions", 0) or 0)
+    avg_position = gsc.get("avg_position")
+    striking = gsc.get("striking_distance") or []
+
+    checks: list[CheckResult] = []
+
+    # Search visibility: is the site appearing in results, and earning clicks?
+    if clicks > 0:
+        checks.append(
+            CheckResult(
+                "search_visibility", 100.0, FindingStatus.passed, Severity.low, _OBS,
+                value=f"{clicks} clicks from {impressions} impressions (last 28 days)",
+            )
+        )
+    elif impressions > 0:
+        checks.append(
+            CheckResult(
+                "search_visibility", 60.0, FindingStatus.warn, Severity.medium, _OBS,
+                value=f"{impressions} impressions but 0 clicks (last 28 days)",
+                recommendation="The site appears in search but earns no clicks. Improve "
+                "titles and meta descriptions to lift click-through.",
+            )
+        )
+    else:
+        checks.append(
+            CheckResult(
+                "search_visibility", 25.0, FindingStatus.fail, Severity.high, _OBS,
+                value="no impressions in search over the last 28 days",
+                recommendation="The site is not appearing in Google search. Check "
+                "indexation and that pages target real demand.",
+            )
+        )
+
+    # Average position, impression-weighted. Absent when there were no impressions.
+    if avg_position is not None and impressions > 0:
+        if avg_position <= 5:
+            score, status, severity = 100.0, FindingStatus.passed, Severity.low
+        elif avg_position <= 10:
+            score, status, severity = 80.0, FindingStatus.passed, Severity.low
+        elif avg_position <= 20:
+            score, status, severity = 55.0, FindingStatus.warn, Severity.medium
+        else:
+            score, status, severity = 30.0, FindingStatus.fail, Severity.medium
+        checks.append(
+            CheckResult(
+                "average_position", score, status, severity, _OBS,
+                value=f"average position {avg_position:.1f} (impression-weighted, last 28 days)",
+            )
+        )
+
+    # Striking-distance opportunities: ranking on page 1-2 but not the top. Reported
+    # as an opportunity list rather than scored — it is upside, not a fault.
+    if striking:
+        terms = ", ".join(q.get("query", "") for q in striking[:5])
+        checks.append(
+            CheckResult(
+                "striking_distance", None, FindingStatus.info, Severity.info, _OBS,
+                value=f"{len(striking)} queries ranking 3-20 (quick wins): {terms}",
+                recommendation="Strengthen pages targeting these terms to push them onto "
+                "page one.",
+                evidence={"striking_distance": striking[:10]},
+            )
+        )
+
+    return checks
+
+
 class OnPageSeoAudit(AuditModule):
     key = "on_page_seo"
     label = "On-page SEO"
@@ -89,7 +159,7 @@ class OnPageSeoAudit(AuditModule):
             self._on_page_elements(dom, pages),
             self._keyword_targeting(dom),
             self._semantic_content(dom),
-            self._ranking_performance(dom),
+            self._ranking_performance(dom, context.connectors.get("search_console")),
             self._local_seo(dom),
         ]
         return AuditResult(
@@ -265,7 +335,7 @@ class OnPageSeoAudit(AuditModule):
         checks = [depth, note]
         return CategoryResult("semantic_content", scoring.category_score(checks), True, checks)
 
-    def _ranking_performance(self, dom: str) -> CategoryResult:
+    def _ranking_performance(self, dom: str, gsc: dict | None) -> CategoryResult:
         title_match = _TITLE_RE.search(dom)
         title = _text(title_match.group(1)) if title_match else ""
         phrases = sorted(_keywords(title))[:8]
@@ -273,17 +343,20 @@ class OnPageSeoAudit(AuditModule):
             "anticipated_phrases", None, FindingStatus.info, Severity.info, _INF,
             value="likely target terms from on-page signals: " + (", ".join(phrases) or "none"),
         )
-        rankings = CheckResult(
-            "rankings", None, FindingStatus.info, Severity.info, _NEEDS,
-            value="actual rankings and striking-distance need Search Console or a SERP source",
-        )
-        # No scorable check here yet, so the category reports as not-yet-assessed.
-        return CategoryResult(
-            "ranking_performance",
-            scoring.category_score([anticipated, rankings]),
-            True,
-            [anticipated, rankings],
-        )
+
+        if gsc is None:
+            rankings = CheckResult(
+                "rankings", None, FindingStatus.info, Severity.info, _NEEDS,
+                value="actual rankings and striking-distance need Search Console or a SERP source",
+            )
+            # No scorable check yet, so the category reports as not-yet-assessed.
+            checks = [anticipated, rankings]
+            return CategoryResult(
+                "ranking_performance", scoring.category_score(checks), True, checks
+            )
+
+        checks = [anticipated, *_ranking_checks_from_gsc(gsc)]
+        return CategoryResult("ranking_performance", scoring.category_score(checks), True, checks)
 
     def _local_seo(self, dom: str) -> CategoryResult:
         low = dom.lower()

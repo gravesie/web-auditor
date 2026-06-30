@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Connections — {{ site.domain }}{% endblock %}
+{% block content %}
+  <p><a href="/sites/{{ site.id }}">&larr; {{ site.name or site.domain }}</a></p>
+  <h2>Data connections <span class="muted">{{ site.domain }}</span></h2>
+
+  {% if connected %}
+    <div class="card" style="border-color:#86efac; background:var(--good-bg); color:var(--good);">
+      Connected {{ connected }}.
+    </div>
+  {% endif %}
+  {% if error %}
+    <div class="card error">{{ error.replace('+', ' ') }}</div>
+  {% endif %}
+
+  <div class="card">
+    <h3 style="margin-top:0;">Google (Search Console &amp; Analytics 4)</h3>
+    <p class="muted">
+      Connecting Google lets the audits use real ranking, indexation and engagement
+      data instead of inferring it. Read-only access; you can disconnect at any time.
+    </p>
+
+    {% set sc = connections.get('search_console') %}
+    {% set ga = connections.get('ga4') %}
+    <table>
+      <tr>
+        <th>Source</th><th>Status</th><th>Bound to</th><th>Last synced</th><th></th>
+      </tr>
+      {% for key, label, conn in [
+          ('search_console', 'Search Console', sc),
+          ('ga4', 'Analytics 4', ga)] %}
+        <tr>
+          <td>{{ label }}</td>
+          <td>
+            {% if conn and conn.status == 'connected' %}
+              <span class="badge b-pass">connected</span>
+            {% elif conn and conn.status == 'error' %}
+              <span class="badge b-fail">error</span>
+            {% elif conn and conn.status == 'disconnected' %}
+              <span class="badge b-info">disconnected</span>
+            {% else %}
+              <span class="muted">not connected</span>
+            {% endif %}
+          </td>
+          <td class="muted">—</td>
+          <td class="muted">
+            {{ conn.last_synced_at.strftime('%Y-%m-%d %H:%M') if conn and conn.last_synced_at else '—' }}
+          </td>
+          <td>
+            {% if conn and conn.status != 'disconnected' %}
+              <form method="post"
+                    action="/sites/{{ site.id }}/connections/{{ key }}/disconnect"
+                    style="display:inline;">
+                <button type="submit" style="background:#6b7280;">Disconnect</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+
+    <p style="margin-top:1rem;">
+      {% if oauth_configured %}
+        <a href="/sites/{{ site.id }}/connections/google/start">
+          <button type="button">
+            {{ 'Reconnect Google' if (sc or ga) else 'Connect Google' }}
+          </button>
+        </a>
+      {% else %}
+        <span class="muted">Google OAuth is not configured. Set GOOGLE_OAUTH_CLIENT_ID
+        and GOOGLE_OAUTH_CLIENT_SECRET in .env.</span>
+      {% endif %}
+    </p>
+  </div>
+{% endblock %}

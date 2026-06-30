@@ -2,7 +2,7 @@
 {% from "_macros.html" import score_bar, delta_badge %}
 {% block title %}{{ site.domain }} — Web Auditor{% endblock %}
 {% block content %}
-  <p><a href="/">&larr; All sites</a> <span class="actions"><a href="/sites/{{ site.id }}/edit">Edit settings</a></span></p>
+  <p><a href="/">&larr; All sites</a> <span class="actions"><a href="/sites/{{ site.id }}/edit">Edit settings</a><a href="/sites/{{ site.id }}/connections">Connections</a></span></p>
   <h2>{{ site.name or site.domain }} <span class="muted">{{ site.domain }}</span></h2>
 
   <div class="card">
@@ -11,6 +11,7 @@
       <button type="submit">Run audit</button>
     </form>
     <span hx-get="/sites/{{ site.id }}/status" hx-trigger="load" hx-swap="outerHTML"></span>
+    <span style="float:right;" hx-get="/worker/status" hx-trigger="load" hx-swap="outerHTML"></span>
   </div>
 
   {% if latest %}
@@ -18,7 +19,7 @@
       <div style="font-size:1.1rem;">Site score: {{ score_bar(latest.site_score) }}
         <span class="muted">/ 100</span> {{ delta_badge(site_delta) }}</div>
       <p class="muted" style="margin-bottom:0;">
-        Run {{ latest.started_at.strftime('%Y-%m-%d %H:%M') }} · status {{ latest.status }}
+        Run {{ (latest.started_at or latest.created_at).strftime('%Y-%m-%d %H:%M') }} · status {{ latest.status }}
         {% if site_delta is not none %}· change vs previous run{% endif %}
       </p>
     </div>
@@ -73,7 +74,10 @@
           <tbody>
             {% for row in run_rows %}
               <tr>
-                <td class="muted">{{ row.run.started_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td class="muted">
+                  {% if row.run.started_at %}{{ row.run.started_at.strftime('%Y-%m-%d %H:%M') }}
+                  {% else %}<span class="badge b-info">{{ row.run.status }}</span>{% endif %}
+                </td>
                 <td>{{ score_bar(row.run.site_score) }}</td>
                 <td>{{ delta_badge(row.delta) }}</td>
               </tr>

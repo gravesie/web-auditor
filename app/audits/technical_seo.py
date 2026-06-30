@@ -183,6 +183,50 @@ def _sitemap_health(sample: list[SitemapProbe]) -> CheckResult | None:
     )
 
 
+def _indexed_count_check(gsc: dict | None, pages: list[CrawledPage]) -> CheckResult:
+    """Indexation signal from Search Console when connected; needs-connection otherwise.
+
+    The signal is the number of distinct pages that actually appeared in Google search
+    over the reporting window (Search Analytics `page` dimension) — a trustworthy lower
+    bound on indexed pages. Zero serving pages does NOT prove the site is de-indexed (it
+    may simply have no search demand in the window), so that case is reported, not
+    failed. Without a grant the public `site:` operator is unreliable, so we say so.
+    """
+    if gsc is None:
+        return CheckResult(
+            "indexed_count", None, FindingStatus.info, Severity.info, _NEEDS,
+            value="indexed-page signal needs Search Console (site: is unreliable)",
+        )
+
+    serving = int(gsc.get("serving_pages", 0) or 0)
+    crawled = len([p for p in pages if p.status == 200])
+
+    if serving == 0:
+        # No impressions in the window: can't confirm indexation either way. Not a fault.
+        return CheckResult(
+            "indexed_count", None, FindingStatus.info, Severity.info, _OBS,
+            value="no pages drew search impressions in the last 28 days; "
+            "indexation can't be confirmed from search activity",
+        )
+
+    # Compare against pages the crawl reached. Well below that suggests pages Google
+    # isn't serving; we flag it as a lever, not a hard fault.
+    if crawled and serving < 0.8 * crawled:
+        return CheckResult(
+            "indexed_count", 70.0, FindingStatus.warn, Severity.medium, _OBS,
+            value=f"{serving} pages appeared in Google search; crawl reached {crawled}",
+            recommendation="Fewer pages appear in search than were crawled. Review "
+            "excluded pages in Search Console's Pages report.",
+            evidence={"serving_pages": serving, "crawled_pages": crawled},
+        )
+
+    return CheckResult(
+        "indexed_count", 100.0, FindingStatus.passed, Severity.low, _OBS,
+        value=f"{serving} pages appeared in Google search (last 28 days)",
+        evidence={"serving_pages": serving, "crawled_pages": crawled},
+    )
+
+
 class TechnicalSeoAudit(AuditModule):
     key = "technical_seo"
     label = "Technical SEO"
@@ -194,8 +238,9 @@ class TechnicalSeoAudit(AuditModule):
         pages: list[CrawledPage] = context.data.get("pages", [])
         dom = render.html or acq.html
 
+        gsc = context.connectors.get("search_console")
         cats = [
-            self._indexation(acq, dom),
+            self._indexation(acq, dom, pages, gsc),
             self._crawlability(acq, dom, pages),
             self._site_response(pages),
             self._mobile(dom),
@@ -208,7 +253,9 @@ class TechnicalSeoAudit(AuditModule):
             categories=cats,
         )
 
-    def _indexation(self, acq: Acquisition, dom: str) -> CategoryResult:
+    def _indexation(
+        self, acq: Acquisition, dom: str, pages: list[CrawledPage], gsc: dict | None
+    ) -> CategoryResult:
         checks: list[CheckResult] = []
 
         robots_content = _meta_content(dom, "robots")
@@ -253,12 +300,7 @@ class TechnicalSeoAudit(AuditModule):
             )
         )
 
-        checks.append(
-            CheckResult(
-                "indexed_count", None, FindingStatus.info, Severity.info, _NEEDS,
-                value="real indexed-page count needs Search Console (site: is unreliable)",
-            )
-        )
+        checks.append(_indexed_count_check(gsc, pages))
         return CategoryResult("indexation", scoring.category_score(checks), True, checks)
 
     def _crawlability(

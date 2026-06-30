@@ -19,6 +19,12 @@ node_modules/
 # Generated report emails / PDFs
 outbox/
 
+# Background worker liveness + log
+.worker_state.json
+worker.log
+.worker.lock
+server.log
+
 # OS
 .DS_Store
 Thumbs.db

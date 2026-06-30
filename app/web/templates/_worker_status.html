@@ -1,0 +1,12 @@
+<span id="worker-status" hx-get="/worker/status" hx-trigger="every 5s" hx-swap="outerHTML">
+  <span class="muted">Worker:</span>
+  {% if worker.running %}
+    <span class="badge b-pass">running</span>
+    <button type="button" disabled style="background:#9ca3af; cursor:default;">Start worker</button>
+  {% else %}
+    <span class="badge b-info">stopped</span>
+    <button type="button" hx-post="/worker/start" hx-target="#worker-status" hx-swap="outerHTML">
+      Start worker
+    </button>
+  {% endif %}
+</span>
