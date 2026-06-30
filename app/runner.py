@@ -22,6 +22,7 @@ from app.audits.base import AuditContext, AuditModule, AuditResult
 from app.audits.build_security import BuildSecurityAudit
 from app.audits.compliance import ComplianceAudit
 from app.audits.content_quality import ContentQualityAudit
+from app.audits.content_strategy import ContentStrategyAudit
 from app.audits.geo import GeoAudit
 from app.audits.messaging import MessagingAudit
 from app.audits.on_page_seo import OnPageSeoAudit
@@ -47,6 +48,7 @@ AUDIT_MODULES: list[AuditModule] = [
     PerformanceAudit(),
     MessagingAudit(),
     GeoAudit(),
+    ContentStrategyAudit(),
     AnalyticsAudit(),
 ]
 

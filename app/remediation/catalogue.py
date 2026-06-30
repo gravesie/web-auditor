@@ -275,6 +275,37 @@ CATALOGUE: dict[str, RemediationEntry] = {
         "Missing About and Contact pages make a business look untrustworthy.",
         "Publish clear About and Contact pages.",
     ),
+    # --- content_strategy ---
+    "content_strategy.content_inventory": R(
+        4, 3,
+        "With little or no published content, you miss the searches and trust that content earns.",
+        "Build a content library that answers your buyers' questions, published regularly.",
+    ),
+    "content_strategy.content_recency": R(
+        3, 2,
+        "A content engine that's gone quiet looks stalled to both buyers and search engines.",
+        "Get back to a regular publishing rhythm; freshness signals an active business.",
+    ),
+    "content_strategy.publishing_regularity": R(
+        3, 3,
+        "Bursts followed by silence don't build the momentum that steady publishing does.",
+        "Publish on a steady cadence, weekly or better, rather than in fits and starts.",
+    ),
+    "content_strategy.content_relevance": R(
+        4, 3,
+        "Content that wanders off your buyers' questions earns traffic that never converts.",
+        "Focus the topic set on your ideal customer's problems and buying journey.",
+    ),
+    "content_strategy.content_performance": R(
+        2, 2,
+        "Without connected analytics you can't see which content actually earns traffic.",
+        "Connect Search Console and GA4 to measure content performance per URL.",
+    ),
+    "content_strategy.conversion_pathway": R(
+        4, 2,
+        "Content that ranks but offers no next step converts none of the traffic it earns.",
+        "Give every content page a clear next step: a CTA, an offer, or a link to convert.",
+    ),
     # --- geo ---
     "geo.ai_answer_citation": R(
         4, 3,

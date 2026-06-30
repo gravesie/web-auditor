@@ -25,6 +25,7 @@ from app.audits.base import (
     CategoryResult,
     CheckResult,
 )
+from app.conversion import detect_conversion_systems, has_cta
 from app.models.enums import DetectionTag, FindingStatus, Severity
 
 _OBS = DetectionTag.observed
@@ -42,7 +43,6 @@ _DEFS = {c.key: c for c in CATEGORIES}
 
 _TAG_RE = re.compile(r"<[^>]+>")
 _H1_RE = re.compile(r"<h1[^>]*>(.*?)</h1>", re.I | re.S)
-_FORM_RE = re.compile(r"<form\b", re.I)
 
 _FILLER = [
     "innovative solutions", "world-class", "world class", "leading provider",
@@ -60,19 +60,11 @@ _AUDIENCE_RE = re.compile(
     r"|designed for|built for|we help|helping|ideal for|our clients|for companies",
     re.I,
 )
-_CTA_RE = re.compile(
-    r"get started|contact us|book a|book now|sign up|request a|get a quote|"
-    r"free trial|get in touch|talk to|request demo|book a demo|buy now|shop now|"
-    r"subscribe|start (?:free|now)|get your",
-    re.I,
-)
 _PROOF_RE = re.compile(
     r"trusted by|\bclients?\b|\bcustomers?\b|testimonial|case stud|rated|\b\d+%|"
     r"\b\d+\+?\s*(?:clients|customers|companies|years)",
     re.I,
 )
-_CHAT_RE = re.compile(r"intercom|drift\.com|tawk\.to|livechat|crisp\.chat|zendesk|hubspot", re.I)
-_BOOKING_RE = re.compile(r"calendly|cal\.com|acuity|savvycal|book(?:ing)?", re.I)
 
 
 def _text(html: str) -> str:
@@ -179,7 +171,7 @@ class MessagingAudit(AuditModule):
         return CategoryResult("value_prop", scoring.category_score(checks), True, checks)
 
     def _conversion(self, dom: str, text: str) -> CategoryResult:
-        cta = bool(_CTA_RE.search(text))
+        cta = has_cta(text)
         cta_check = CheckResult(
             "cta_present",
             100.0 if cta else 30.0,
@@ -190,17 +182,7 @@ class MessagingAudit(AuditModule):
             recommendation=None if cta else "Add a clear primary call-to-action.",
         )
 
-        systems = []
-        if _FORM_RE.search(dom):
-            systems.append("form")
-        if "mailto:" in dom.lower():
-            systems.append("email")
-        if "tel:" in dom.lower():
-            systems.append("phone")
-        if _BOOKING_RE.search(dom):
-            systems.append("booking")
-        if _CHAT_RE.search(dom):
-            systems.append("live chat")
+        systems = detect_conversion_systems(dom)
         systems_check = CheckResult(
             "conversion_systems",
             100.0 if systems else 40.0,
