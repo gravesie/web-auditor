@@ -92,42 +92,46 @@ def render(
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(headless=True)
-            context = browser.new_context(user_agent=USER_AGENT)
-            page = context.new_page()
+            # Always close the browser, even if navigation or evaluation raises, so a
+            # failed render never leaks a headless Chromium process.
+            try:
+                context = browser.new_context(user_agent=USER_AGENT)
+                page = context.new_page()
 
-            def on_request(req) -> None:
-                host = urlsplit(req.url).hostname or ""
-                third = registrable_domain(host) != page_domain
-                requests.append(RequestRecord(req.url, req.resource_type, req.method, third))
+                def on_request(req) -> None:
+                    host = urlsplit(req.url).hostname or ""
+                    third = registrable_domain(host) != page_domain
+                    requests.append(RequestRecord(req.url, req.resource_type, req.method, third))
 
-            def on_console(msg) -> None:
-                if msg.type == "error":
-                    console_errors.append(msg.text[:500])
+                def on_console(msg) -> None:
+                    if msg.type == "error":
+                        console_errors.append(msg.text[:500])
 
-            page.on("request", on_request)
-            page.on("console", on_console)
+                page.on("request", on_request)
+                page.on("console", on_console)
 
-            response = page.goto(target, wait_until=wait_until, timeout=timeout_ms)
-            page.wait_for_timeout(SETTLE_MS)
+                response = page.goto(target, wait_until=wait_until, timeout=timeout_ms)
+                page.wait_for_timeout(SETTLE_MS)
 
-            result.final_url = page.url
-            result.status = response.status if response else None
-            result.ok = bool(response and response.ok)
-            result.title = page.title()
-            result.html = page.content()[:1_000_000]
-            for c in context.cookies():
-                result.cookies.append(
-                    CookieRecord(
-                        name=c.get("name", ""),
-                        domain=c.get("domain", ""),
-                        secure=bool(c.get("secure")),
-                        http_only=bool(c.get("httpOnly")),
-                        same_site=c.get("sameSite"),
+                result.final_url = page.url
+                result.status = response.status if response else None
+                result.ok = bool(response and response.ok)
+                result.title = page.title()
+                result.html = page.content()[:1_000_000]
+                for c in context.cookies():
+                    result.cookies.append(
+                        CookieRecord(
+                            name=c.get("name", ""),
+                            domain=c.get("domain", ""),
+                            secure=bool(c.get("secure")),
+                            http_only=bool(c.get("httpOnly")),
+                            same_site=c.get("sameSite"),
+                        )
                     )
-                )
-            if run_axe:
-                result.axe = _run_axe(page)
-            browser.close()
+                if run_axe:
+                    result.axe = _run_axe(page)
+            finally:
+                browser.close()
     except PlaywrightError as exc:
         result.error = f"{type(exc).__name__}: {exc}"
 

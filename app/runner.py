@@ -9,6 +9,10 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
 from app.acquisition.crawler import CrawledPage, crawl
 from app.acquisition.fetcher import Acquisition, fetch
 from app.acquisition.pagespeed import fetch_pagespeed
@@ -47,11 +51,32 @@ def _as_uuid(run_id: str | uuid.UUID) -> uuid.UUID:
     return run_id if isinstance(run_id, uuid.UUID) else uuid.UUID(run_id)
 
 
+def _active_run_id(session: Session, site_id: uuid.UUID) -> str | None:
+    """Id of the site's current pending-or-running run, or None if it has none."""
+    run = session.execute(
+        select(AuditRun)
+        .where(
+            AuditRun.site_id == site_id,
+            AuditRun.status.in_([RunStatus.pending, RunStatus.running]),
+        )
+        .order_by(AuditRun.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    return str(run.id) if run is not None else None
+
+
 def create_pending_run(domain: str, *, email: bool = False, scheduled: bool = False) -> str:
     """Create a pending run for a domain (creating the site if needed). Returns the run id.
 
     This is the enqueue step: the web request / scheduler calls it, then the worker
     picks the pending run up and executes it.
+
+    Single-flight: a site may have only one active (pending or running) run at a
+    time. If one already exists we reuse it instead of queueing a duplicate, so
+    repeated button clicks and an overlapping scheduled run all collapse to the
+    same run rather than auditing the site several times over. A partial unique
+    index enforces this at the database level; the IntegrityError branch handles
+    the race where two requests pass the check at once.
     """
     session = SessionLocal()
     try:
@@ -60,6 +85,11 @@ def create_pending_run(domain: str, *, email: bool = False, scheduled: bool = Fa
             site = Site(domain=domain)
             session.add(site)
             session.flush()
+
+        active = _active_run_id(session, site.id)
+        if active is not None:
+            return active
+
         run = AuditRun(
             site_id=site.id,
             status=RunStatus.pending,
@@ -67,8 +97,41 @@ def create_pending_run(domain: str, *, email: bool = False, scheduled: bool = Fa
             email_requested=email,
         )
         session.add(run)
-        session.commit()
+        try:
+            session.commit()
+        except IntegrityError:
+            # A concurrent enqueue won the race; reuse the run it created.
+            session.rollback()
+            active = _active_run_id(session, site.id)
+            if active is not None:
+                return active
+            raise
         return str(run.id)
+    finally:
+        session.close()
+
+
+def reap_stuck_runs() -> int:
+    """Fail any run still marked 'running', returning how many were reaped.
+
+    Called by the worker at startup, *after* it has taken the single-instance lock:
+    no other worker is alive, so a run still in 'running' was orphaned by a worker
+    that died mid-audit. Failing it frees the single-flight slot and stops the
+    dashboard showing a run that will never finish.
+    """
+    session = SessionLocal()
+    try:
+        stuck = (
+            session.execute(select(AuditRun).where(AuditRun.status == RunStatus.running))
+            .scalars()
+            .all()
+        )
+        for run in stuck:
+            run.status = RunStatus.failed
+            run.error_message = "Worker stopped before this run finished."
+            run.finished_at = datetime.now(UTC)
+        session.commit()
+        return len(stuck)
     finally:
         session.close()
 
