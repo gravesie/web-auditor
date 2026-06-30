@@ -4,7 +4,7 @@ from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -255,4 +255,32 @@ def site_detail(
             "changed_findings": changed_findings,
             "run_rows": run_rows,
         },
+    )
+
+
+@router.get("/sites/{site_id}/report")
+def download_report(
+    site_id: UUID,
+    session: Session = Depends(get_session),
+    account: Account = Depends(get_current_account),
+) -> Response:
+    """Download the branded PDF for the site's latest completed audit."""
+    site = owned_site(session, site_id, account.id)
+    if site is None:
+        return Response("Site not found", status_code=404, media_type="text/plain")
+    latest = _latest_completed_run(session, site_id)
+    if latest is None:
+        return Response(
+            "No completed audit to download yet", status_code=404, media_type="text/plain"
+        )
+
+    # Imported here so the dashboard process only loads Playwright when a report is
+    # actually requested, not at startup.
+    from app.reporting.report import generate_report
+
+    report = generate_report(latest.id)
+    return Response(
+        content=report.pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{report.filename}"'},
     )

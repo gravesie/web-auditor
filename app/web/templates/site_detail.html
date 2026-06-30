@@ -22,6 +22,9 @@
         Run {{ (latest.started_at or latest.created_at).strftime('%Y-%m-%d %H:%M') }} · status {{ latest.status }}
         {% if site_delta is not none %}· change vs previous run{% endif %}
       </p>
+      <a class="cta-download" href="/sites/{{ site.id }}/report" download>
+        Download your report now (branded PDF)
+      </a>
     </div>
 
     {% if action_list %}
