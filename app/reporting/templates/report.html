@@ -31,6 +31,18 @@
   .rec { color: #6b7280; font-size: 11px; }
   .cat { page-break-inside: avoid; }
   .audit { page-break-inside: avoid; margin-bottom: 10px; }
+  .action { page-break-inside: avoid; padding: 6px 0; border-bottom: 1px solid #eee;
+            display: flex; gap: 8px; }
+  .action .rank { font-weight: 700; color: #6b7280; min-width: 16px; }
+  .action .why { font-weight: 700; }
+  .action .ctx { color: #6b7280; font-size: 11px; }
+  .action .how { color: #374151; font-size: 11px; margin-top: 2px; }
+  .ipill { display: inline-block; font-size: 9px; font-weight: 700; color: #fff;
+           border-radius: 8px; padding: 1px 6px; margin-right: 4px; }
+  .epill { display: inline-block; font-size: 9px; font-weight: 700; color: #374151;
+           background: #f1f5f9; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1px 6px; }
+  .imp-5, .imp-4 { background: #b91c1c; } .imp-3 { background: #b45309; }
+  .imp-2 { background: #15803d; } .imp-1 { background: #9ca3af; }
 </style>
 </head>
 <body>
@@ -53,6 +65,27 @@
     <span class="muted">/ 100 overall</span>
   </div>
 </div>
+
+{% if action_list %}
+  {% set impact_words = {5: 'Critical', 4: 'High', 3: 'Medium', 2: 'Low', 1: 'Minor'} %}
+  {% set effort_words = {1: 'Quick win', 2: 'Moderate', 3: 'Project'} %}
+  <h2>What to fix first</h2>
+  <div class="muted" style="margin-bottom:6px;">The work that costs you the most, easiest first.</div>
+  {% for a in action_list %}
+    <div class="action">
+      <div class="rank">{{ loop.index }}</div>
+      <div>
+        <div class="why">{{ a.why }}</div>
+        <div class="ctx">{{ a.audit_label }}{% if a.value %} · {{ a.value }}{% endif %}</div>
+        <div class="how">&rarr; {{ a.how }}</div>
+        <div style="margin-top:3px;">
+          <span class="ipill imp-{{ a.impact }}">{{ impact_words[a.impact] }} impact</span>
+          <span class="epill">{{ effort_words[a.effort] }}</span>
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+{% endif %}
 
 <h2>Audit scores</h2>
 <table>

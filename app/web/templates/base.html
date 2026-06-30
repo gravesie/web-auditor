@@ -48,6 +48,21 @@
     .finding { padding: 0.5rem 0; border-bottom: 1px solid var(--line); }
     .finding:last-child { border-bottom: none; }
     .rec { font-size: 0.85rem; color: var(--muted); margin-top: 0.2rem; }
+    .action { display: grid; grid-template-columns: 1.6rem 1fr; gap: 0.5rem;
+              padding: 0.7rem 0; border-bottom: 1px solid var(--line); }
+    .action:last-child { border-bottom: none; }
+    .action .rank { color: var(--muted); font-weight: 700; }
+    .action .why { font-weight: 600; margin-bottom: 0.15rem; }
+    .action .how { font-size: 0.85rem; color: var(--muted); margin-top: 0.2rem; }
+    .action .pills { margin-top: 0.3rem; }
+    .pill { display: inline-block; font-size: 0.68rem; font-weight: 600;
+            padding: 0.08rem 0.5rem; border-radius: 999px; margin-right: 0.35rem; }
+    .pill-impact { color: #fff; }
+    .imp-5, .imp-4 { background: var(--bad); }
+    .imp-3 { background: var(--ok); }
+    .imp-2 { background: var(--good); }
+    .imp-1 { background: var(--muted); }
+    .pill-effort { color: var(--fg); background: var(--info-bg); border: 1px solid var(--line); }
     .delta { font-size: 0.8rem; font-weight: 600; }
     .delta.up { color: var(--good); }
     .delta.down { color: var(--bad); }

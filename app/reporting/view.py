@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import AuditRun, Finding, SubAuditResult
+from app.remediation.ranking import ActionItem, rank_findings
 from app.runner import AUDIT_MODULES
 
 # Human labels for audits and their categories, from the registered modules.
@@ -61,6 +62,24 @@ def build_audit_view(session: Session, run: AuditRun) -> list[dict]:
             }
         )
     return audits
+
+
+def build_action_list(session: Session, run: AuditRun) -> list[ActionItem]:
+    """The prioritised action list for a run: actionable findings, impact-first.
+
+    This is the output layer the dashboard and report lead with. The order is
+    deterministic, set entirely by the remediation catalogue (see ranking.py).
+    """
+    rows = session.execute(
+        select(Finding, SubAuditResult.audit_key)
+        .join(SubAuditResult, Finding.sub_audit_result_id == SubAuditResult.id)
+        .where(SubAuditResult.run_id == run.id)
+    ).all()
+    triples = [
+        (finding, audit_key, AUDIT_LABELS.get(audit_key, audit_key))
+        for finding, audit_key in rows
+    ]
+    return rank_findings(triples)
 
 
 def _run_index(session: Session, run: AuditRun) -> tuple[dict, dict]:
