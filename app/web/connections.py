@@ -20,9 +20,10 @@ from starlette.templating import Jinja2Templates
 
 from app.connectors import ga4, google_oauth, gsc, store
 from app.db import get_session
-from app.models import Connection, Site
+from app.models import Account, Connection
 from app.models.enums import ConnectionSource, ConnectionStatus
 from app.security import crypto
+from app.tenancy import get_current_account, owned_site
 
 router = APIRouter()
 
@@ -42,8 +43,9 @@ def connections_page(
     error: str | None = None,
     connected: str | None = None,
     session: Session = Depends(get_session),
+    account: Account = Depends(get_current_account),
 ) -> HTMLResponse:
-    site = session.get(Site, site_id)
+    site = owned_site(session, site_id, account.id)
     if site is None:
         return HTMLResponse("Site not found", status_code=404)
     return templates.TemplateResponse(
@@ -60,8 +62,12 @@ def connections_page(
 
 
 @router.get("/sites/{site_id}/connections/google/start")
-def google_start(site_id: UUID, session: Session = Depends(get_session)):
-    site = session.get(Site, site_id)
+def google_start(
+    site_id: UUID,
+    session: Session = Depends(get_session),
+    account: Account = Depends(get_current_account),
+):
+    site = owned_site(session, site_id, account.id)
     if site is None:
         return HTMLResponse("Site not found", status_code=404)
     if not google_oauth.is_configured():
@@ -80,6 +86,7 @@ def google_callback(
     code: str = "",
     error: str = "",
     session: Session = Depends(get_session),
+    account: Account = Depends(get_current_account),
 ) -> HTMLResponse:
     # The user can deny consent; Google sends ?error=access_denied in that case.
     try:
@@ -93,7 +100,7 @@ def google_callback(
     if not code:
         return RedirectResponse(url=f"{redirect}?error=No+authorisation+code", status_code=303)
 
-    site = session.get(Site, UUID(site_id))
+    site = owned_site(session, UUID(site_id), account.id)
     if site is None:
         return HTMLResponse("Site not found", status_code=404)
 
@@ -142,6 +149,7 @@ def google_bind(
     gsc_site: str = Form(""),
     ga4_property: str = Form(""),
     session: Session = Depends(get_session),
+    account: Account = Depends(get_current_account),
 ):
     try:
         payload = crypto.decrypt_json(grant)
@@ -150,7 +158,7 @@ def google_bind(
 
     site_id = UUID(str(payload["site_id"]))
     refresh_token = str(payload["refresh_token"])
-    site = session.get(Site, site_id)
+    site = owned_site(session, site_id, account.id)
     if site is None:
         return HTMLResponse("Site not found", status_code=404)
 
@@ -180,7 +188,14 @@ def google_bind(
 
 
 @router.post("/sites/{site_id}/connections/{source}/disconnect")
-def disconnect(site_id: UUID, source: str, session: Session = Depends(get_session)):
+def disconnect(
+    site_id: UUID,
+    source: str,
+    session: Session = Depends(get_session),
+    account: Account = Depends(get_current_account),
+):
+    if owned_site(session, site_id, account.id) is None:
+        return HTMLResponse("Site not found", status_code=404)
     try:
         source_type = ConnectionSource(source)
     except ValueError:
