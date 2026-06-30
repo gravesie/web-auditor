@@ -21,6 +21,32 @@ R = RemediationEntry
 
 # Exact entries, keyed by "{audit_key}.{check_key}".
 CATALOGUE: dict[str, RemediationEntry] = {
+    # --- analytics ---
+    "analytics.web_analytics": R(
+        5, 1,
+        "With no web analytics you can't see your traffic or conversions, so you're flying blind.",
+        "Install GA4 (or Plausible, Fathom or Matomo) and confirm it's recording.",
+    ),
+    "analytics.conversion_tracking": R(
+        4, 2,
+        "Without conversion tracking you can't tie traffic or ad spend to enquiries and sales.",
+        "Add conversion tracking for the channels you use, and mark your key events as goals.",
+    ),
+    "analytics.behavioural_analytics": R(
+        2, 1,
+        "Without a behavioural tool you can't see how visitors actually use the site.",
+        "Add Hotjar or Microsoft Clarity (Clarity is free) to watch real sessions.",
+    ),
+    "analytics.data_infrastructure": R(
+        2, 2,
+        "Without a tag manager your measurement tags are scattered and hard to govern.",
+        "Move tags into Google Tag Manager so they're organised and auditable.",
+    ),
+    "analytics.measurement_unobserved": R(
+        1, 1,
+        "The page couldn't be rendered, so installed measurement tools can't be detected.",
+        "Re-run the audit; if it persists, check the site renders for an automated browser.",
+    ),
     # --- build_security ---
     "build_security.ai_build_likelihood": R(
         1, 2,
