@@ -1,5 +1,11 @@
 """Server-rendered dashboard views: site list and run drill-down."""
 
+import html
+import os
+import subprocess
+import sys
+import threading
+import time
 from pathlib import Path
 from uuid import UUID
 
@@ -23,6 +29,12 @@ router = APIRouter()
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+
+# Repo root, for the admin "refresh code" action (git pull).
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+# The dev server binds here; the restart action re-execs uvicorn with these.
+_SERVER_HOST = "127.0.0.1"
+_SERVER_PORT = "8000"
 
 
 def _latest_run(session: Session, site_id: UUID) -> AuditRun | None:
@@ -67,7 +79,9 @@ def dashboard(
         .all()
     )
     rows = [{"site": site, "run": _latest_completed_run(session, site.id)} for site in sites]
-    return templates.TemplateResponse(request, "dashboard.html", {"rows": rows})
+    return templates.TemplateResponse(
+        request, "dashboard.html", {"rows": rows, "account": account}
+    )
 
 
 # Static /sites paths must be declared before the dynamic /sites/{site_id} route,
@@ -286,4 +300,59 @@ def download_report(
         content=report.pdf,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{report.filename}"'},
+    )
+
+
+# --- Admin controls: manage the running server without the terminal ---
+# These run local process/git operations, so they must sit behind admin auth once the
+# login wall exists. For now the app is localhost-only and single-account.
+
+
+@router.post("/admin/refresh", response_class=HTMLResponse)
+def admin_refresh() -> HTMLResponse:
+    """Pull the latest code (git pull). A restart is still needed to load it."""
+    try:
+        result = subprocess.run(
+            ["git", "pull", "--ff-only"],
+            cwd=_REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        output = (result.stdout + result.stderr).strip() or "(no output)"
+        ok = result.returncode == 0
+    except (subprocess.SubprocessError, OSError) as exc:
+        output, ok = f"git pull failed: {exc}", False
+    note = (
+        "Code updated. Click Restart server to load it."
+        if ok
+        else "Refresh failed, see below."
+    )
+    return HTMLResponse(f"<strong>{html.escape(note)}</strong>\n{html.escape(output)}")
+
+
+@router.post("/admin/restart", response_class=HTMLResponse)
+def admin_restart() -> HTMLResponse:
+    """Restart the server by re-executing uvicorn in place.
+
+    The response is returned first; a background thread then re-execs the process, so
+    the browser gets the reconnecting panel before the socket drops. The panel polls
+    /health and reloads the page once the new process is serving.
+    """
+
+    def _reexec() -> None:
+        time.sleep(0.8)
+        os.execv(
+            sys.executable,
+            [sys.executable, "-m", "uvicorn", "app.main:app",
+             "--host", _SERVER_HOST, "--port", _SERVER_PORT],
+        )
+
+    threading.Thread(target=_reexec, daemon=True).start()
+    return HTMLResponse(
+        '<div hx-get="/health" hx-trigger="every 2s" hx-swap="none" '
+        "hx-on::after-request=\"if(event.detail.successful){window.location.reload()}\">"
+        "Restarting the server… this will reload automatically when it is back "
+        "(a few seconds)."
+        "</div>"
     )
