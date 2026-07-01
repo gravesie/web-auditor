@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Sign in — Goyande Website Audit{% endblock %}
+{% block content %}
+  <div style="max-width:380px; margin:3rem auto 0;">
+    <div class="card">
+      <h2 style="margin-top:0;">Sign in</h2>
+      {% if error %}
+        <div class="card error" style="margin-bottom:1rem; padding:0.7rem 0.9rem;">{{ error }}</div>
+      {% endif %}
+      <form method="post" action="/login">
+        <p>
+          <label for="email">Email</label>
+          <input type="text" id="email" name="email" autocomplete="username" autofocus>
+        </p>
+        <p>
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" autocomplete="current-password">
+        </p>
+        <button type="submit" style="width:100%; margin-top:0.4rem;">Sign in</button>
+      </form>
+    </div>
+  </div>
+{% endblock %}

@@ -16,12 +16,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.templating import Jinja2Templates
 
+from app.auth import clear_session, current_user, login_session, require_admin
 from app.db import get_session
-from app.models import Account, AuditRun, Site
+from app.models import Account, AuditRun, Site, User
 from app.models.enums import RunStatus
 from app.reporting.presentation import build_page_one
 from app.reporting.view import build_action_list, build_audit_view, build_comparison
 from app.runner import create_pending_run
+from app.security.passwords import verify_password
 from app.tenancy import get_current_account, owned_site
 from app.worker_control import ensure_worker, worker_status
 
@@ -61,6 +63,37 @@ def _normalise_domain(raw: str) -> str:
     host = raw.strip().lower()
     host = host.split("://", 1)[-1]
     return host.split("/", 1)[0]
+
+
+@router.get("/login", response_class=HTMLResponse)
+def login_form(request: Request, user: User | None = Depends(current_user)) -> HTMLResponse:
+    if user is not None:
+        return RedirectResponse("/", status_code=303)
+    return templates.TemplateResponse(request, "login.html", {"error": None})
+
+
+@router.post("/login")
+def login_submit(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+    session: Session = Depends(get_session),
+):
+    user = session.execute(
+        select(User).where(User.email == email.strip().lower())
+    ).scalar_one_or_none()
+    if user is None or not user.is_active or not verify_password(password, user.password_hash):
+        return templates.TemplateResponse(
+            request, "login.html", {"error": "Wrong email or password."}, status_code=401
+        )
+    login_session(request, user)
+    return RedirectResponse("/", status_code=303)
+
+
+@router.get("/logout")
+def logout(request: Request) -> RedirectResponse:
+    clear_session(request)
+    return RedirectResponse("/login", status_code=303)
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -309,7 +342,7 @@ def download_report(
 
 
 @router.post("/admin/refresh", response_class=HTMLResponse)
-def admin_refresh() -> HTMLResponse:
+def admin_refresh(_: User = Depends(require_admin)) -> HTMLResponse:
     """Pull the latest code (git pull). A restart is still needed to load it."""
     try:
         result = subprocess.run(
@@ -332,7 +365,7 @@ def admin_refresh() -> HTMLResponse:
 
 
 @router.post("/admin/restart", response_class=HTMLResponse)
-def admin_restart() -> HTMLResponse:
+def admin_restart(_: User = Depends(require_admin)) -> HTMLResponse:
     """Restart the server by re-executing uvicorn in place.
 
     The response is returned first; a background thread then re-execs the process, so
