@@ -16,6 +16,7 @@ from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.auth import require_user
 from app.db import get_session
 from app.models import Account, Site, User
 
@@ -39,9 +40,16 @@ def get_or_create_default_account(session: Session) -> Account:
     return account
 
 
-def get_current_account(session: Session = Depends(get_session)) -> Account:
-    """The account for the current request. Always the default until login exists."""
-    return get_or_create_default_account(session)
+def get_current_account(
+    user: User = Depends(require_user), session: Session = Depends(get_session)
+) -> Account:
+    """The account for the current request, taken from the signed-in user.
+
+    require_user redirects to /login when there's no session, so every route that
+    depends on this is behind the login wall. CLI and worker paths call
+    get_or_create_default_account directly and are unaffected.
+    """
+    return session.get(Account, user.account_id)
 
 
 def owned_site(session: Session, site_id: uuid.UUID, account_id: uuid.UUID) -> Site | None:

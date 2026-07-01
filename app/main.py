@@ -6,6 +6,7 @@ Audits run via the CLI / background workers, not in a web request.
 
 from fastapi import FastAPI
 from sqlalchemy import text
+from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
 from app.db import engine
@@ -13,6 +14,11 @@ from app.web.connections import router as connections_router
 from app.web.routes import router as web_router
 
 app = FastAPI(title="Web Auditor", version="0.1.0")
+# Signed session cookie carrying the logged-in user id. Rotating secret_key logs
+# everyone out (same key that encrypts connector tokens).
+app.add_middleware(
+    SessionMiddleware, secret_key=settings.secret_key, same_site="lax", https_only=False
+)
 
 
 @app.get("/health")
