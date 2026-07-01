@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_macros.html" import score_bar, delta_badge %}
-{% block title %}{{ site.domain }} — Web Auditor{% endblock %}
+{% block title %}{{ site.domain }} — Goyande Website Audit{% endblock %}
+{% macro tick() %}<svg class="tickicon" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 11L3 7.5l1-1 2.5 2.5L12 3.5l1 1z" fill="#10B981"/></svg>{% endmacro %}
 {% block content %}
   <p><a href="/">&larr; All sites</a> <span class="actions"><a href="/sites/{{ site.id }}/edit">Edit settings</a><a href="/sites/{{ site.id }}/connections">Connections</a></span></p>
   <h2>{{ site.name or site.domain }} <span class="muted">{{ site.domain }}</span></h2>
@@ -14,44 +15,93 @@
     <span style="float:right;" hx-get="/worker/status" hx-trigger="load" hx-swap="outerHTML"></span>
   </div>
 
-  {% if latest %}
-    <div class="card">
-      <div style="font-size:1.1rem;">Site score: {{ score_bar(latest.site_score) }}
-        <span class="muted">/ 100</span> {{ delta_badge(site_delta) }}</div>
-      <p class="muted" style="margin-bottom:0;">
-        Run {{ (latest.started_at or latest.created_at).strftime('%Y-%m-%d %H:%M') }} · status {{ latest.status }}
-        {% if site_delta is not none %}· change vs previous run{% endif %}
-      </p>
-      <a class="cta-download" href="/sites/{{ site.id }}/report" download>
-        Download your report now (branded PDF)
-      </a>
+  {% if latest and page_one %}
+    {% set impact_words = {5: 'Critical', 4: 'High', 3: 'Medium', 2: 'Low', 1: 'Minor'} %}
+    {% set effort_words = {1: 'Quick win', 2: 'Moderate', 3: 'Project'} %}
+    {% set ostat = 's-none' %}
+    {% if page_one.score is not none %}
+      {% set ostat = 's-good' if page_one.score >= 70 else ('s-watch' if page_one.score >= 50 else 's-problem') %}
+    {% endif %}
+    {% set circ = 402 %}
+    {% set val = (page_one.score / 100 * circ) if page_one.score is not none else 0 %}
+
+    <div class="hero">
+      <div class="gauge">
+        <svg viewBox="0 0 160 160" width="150" height="150" aria-hidden="true">
+          <circle class="arc track" cx="80" cy="80" r="64"/>
+          <circle class="arc {{ ostat }}" cx="80" cy="80" r="64"
+            stroke-dasharray="{{ val|round(1) }} {{ circ }}" transform="rotate(-90 80 80)"/>
+        </svg>
+        <div class="val">
+          <div class="num">{{ page_one.score|round|int if page_one.score is not none else 'n/a' }}</div>
+          <div class="den">/ 100</div>
+        </div>
+        <div class="grade {{ ostat }}">{{ page_one.grade }}</div>
+      </div>
+      <div>
+        <div class="kicker">{{ page_one.status_label }}{{ ' · change vs last run' if site_delta is not none else '' }}</div>
+        <h1>{{ page_one.verdict }}</h1>
+        <a class="cta-download" href="/sites/{{ site.id }}/report" download>Download your report (branded PDF)</a>
+      </div>
     </div>
 
-    {% if action_list %}
-      {% set impact_words = {5: 'Critical', 4: 'High', 3: 'Medium', 2: 'Low', 1: 'Minor'} %}
-      {% set effort_words = {1: 'Quick win', 2: 'Moderate', 3: 'Project'} %}
-      <div class="card">
-        <h3>What to fix first</h3>
-        <p class="muted" style="margin-top:0;">The work that costs you the most, easiest first.</p>
-        {% for a in action_list %}
-          <div class="action">
-            <div class="rank">{{ loop.index }}</div>
-            <div>
-              <div class="why">{{ a.why }}</div>
-              <div class="muted" style="font-size:0.85rem;">
-                {{ a.audit_label }}{% if a.value %} · {{ a.value }}{% endif %}
-              </div>
-              <div class="how">&rarr; {{ a.how }}</div>
-              <div class="pills">
-                <span class="pill pill-impact imp-{{ a.impact }}">{{ impact_words[a.impact] }} impact</span>
-                <span class="pill pill-effort">{{ effort_words[a.effort] }}</span>
-                <span class="tag">{{ a.detection }}</span>
-              </div>
+    <div class="card">
+      <h3 style="margin-top:0;">Your customer funnel</h3>
+      <div class="pillars">
+        {% for p in page_one.pillars %}
+          <div class="pil">
+            <div class="top">
+              <span class="name">{{ p.label }}</span>
+              <span class="sc s-{{ p.status }}">{{ p.score|round|int if p.score is not none else 'n/a' }}</span>
             </div>
+            <div class="pbar"><span class="f-{{ p.status }}"
+              style="width:{{ (p.score|round|int) if p.score is not none else 0 }}%"></span></div>
+            <p class="read">{{ p.read }}</p>
           </div>
         {% endfor %}
       </div>
-    {% endif %}
+      <div class="strip">
+        <div class="chip {{ 'problem' if page_one.measure.status == 'problem' else '' }}">
+          {{ tick() }}<span><b>{{ page_one.measure.label }}</b> {{ page_one.measure.detail }}</span>
+        </div>
+        <div class="chip {{ 'problem' if page_one.foundations.status == 'problem' else '' }}">
+          {{ tick() }}<span><b>Foundations</b> {{ page_one.foundations.detail }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="cols">
+        <div>
+          <h3 style="margin-top:0;">Start here — highest return first</h3>
+          {% for a in page_one.top_fixes %}
+            <div class="action">
+              <div class="rank">{{ loop.index }}</div>
+              <div>
+                <div class="why">{{ a.why }}</div>
+                <div class="muted" style="font-size:0.82rem;">
+                  {{ a.audit_label }}{% if a.value %} · {{ a.value }}{% endif %}</div>
+                <div class="how">&rarr; {{ a.how }}</div>
+                <div class="pills">
+                  <span class="pill pill-impact imp-{{ a.impact }}">{{ impact_words[a.impact] }} impact</span>
+                  <span class="pill pill-effort">{{ effort_words[a.effort] }}</span>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        <div>
+          <h3 style="margin-top:0;">What's working</h3>
+          {% for s in page_one.strengths %}
+            <div class="win">{{ tick() }}<span>{{ s }}</span></div>
+          {% else %}
+            <p class="muted">Strengths will show as more of the audit passes.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-divider">The full technical breakdown</div>
 
     {% if changed_findings %}
       <div class="card">
@@ -68,9 +118,32 @@
       </div>
     {% endif %}
 
+    {% if action_list %}
+      <div class="card">
+        <h3 style="margin-top:0;">Full priority list</h3>
+        <p class="muted" style="margin-top:0;">Every actionable finding, impact-first, including foundations.</p>
+        {% for a in action_list %}
+          <div class="action">
+            <div class="rank">{{ loop.index }}</div>
+            <div>
+              <div class="why">{{ a.why }}</div>
+              <div class="muted" style="font-size:0.82rem;">
+                {{ a.audit_label }}{% if a.value %} · {{ a.value }}{% endif %}</div>
+              <div class="how">&rarr; {{ a.how }}</div>
+              <div class="pills">
+                <span class="pill pill-impact imp-{{ a.impact }}">{{ impact_words[a.impact] }} impact</span>
+                <span class="pill pill-effort">{{ effort_words[a.effort] }}</span>
+                <span class="tag">{{ a.detection }}</span>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
     {% for audit in audits %}
       <div class="card">
-        <h3 style="display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="display:flex; justify-content:space-between; align-items:center; margin-top:0;">
           <span>{{ audit.label }} {{ delta_badge(audit.delta) }}</span>
           <span>{{ score_bar(audit.score) }}
             <span class="muted" style="font-weight:400; font-size:0.8rem;">
@@ -116,6 +189,6 @@
       </div>
     {% endif %}
   {% else %}
-    <div class="card"><p class="muted">No runs yet for this site.</p></div>
+    <div class="card"><p class="muted">No completed runs yet for this site.</p></div>
   {% endif %}
 {% endblock %}
