@@ -31,6 +31,11 @@ router = APIRouter()
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+# Templates load once at startup, matching the code loaded at startup. Without this,
+# Jinja auto-reloads templates from disk while the Python code stays as it was, so a
+# not-yet-restarted server can render a new template against an old route and 500.
+# Deploys are a restart anyway (via the admin Restart button), which reloads both.
+templates.env.auto_reload = False
 
 # Repo root, for the admin "refresh code" action (git pull).
 _REPO_ROOT = Path(__file__).resolve().parents[2]

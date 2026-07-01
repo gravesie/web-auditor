@@ -29,6 +29,8 @@ router = APIRouter()
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+# Load templates once at startup, matching the loaded code (see routes.py note).
+templates.env.auto_reload = False
 
 
 def _connections_for(session: Session, site_id: UUID) -> dict[str, Connection]:
