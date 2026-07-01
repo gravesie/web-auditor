@@ -13,6 +13,7 @@ from starlette.templating import Jinja2Templates
 from app.db import get_session
 from app.models import Account, AuditRun, Site
 from app.models.enums import RunStatus
+from app.reporting.presentation import build_page_one
 from app.reporting.view import build_action_list, build_audit_view, build_comparison
 from app.runner import create_pending_run
 from app.tenancy import get_current_account, owned_site
@@ -223,6 +224,7 @@ def site_detail(
     previous = completed[1] if len(completed) > 1 else None
     audits = build_audit_view(session, latest) if latest is not None else []
     action_list = build_action_list(session, latest) if latest is not None else []
+    page_one = build_page_one(session, latest) if latest is not None else None
 
     site_delta = None
     changed_findings: list[dict] = []
@@ -251,6 +253,7 @@ def site_detail(
             "latest": latest,
             "audits": audits,
             "action_list": action_list,
+            "page_one": page_one,
             "site_delta": site_delta,
             "changed_findings": changed_findings,
             "run_rows": run_rows,
