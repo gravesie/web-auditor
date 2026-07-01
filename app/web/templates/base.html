@@ -25,9 +25,12 @@
            color: var(--fg); background: var(--paper); line-height: 1.5; }
     a { color: #0F766E; text-decoration: none; }
     a:hover { text-decoration: underline; }
-    header { background: var(--navy); padding: 0.85rem 1.5rem; }
+    header { background: var(--navy); padding: 0.7rem 1.5rem; display: flex; align-items: center; }
+    header .brand { display: inline-flex; align-items: center; }
+    header .lotus { height: 30px; width: auto; margin-right: 10px; }
     header .wm { font-weight: 600; font-size: 1.3rem; letter-spacing: -1px; color: #fff; }
-    header .wm:hover { text-decoration: none; }
+    header .brand:hover { text-decoration: none; }
+    header .brand:hover .wm { text-decoration: underline; }
     header .wm .dot { color: var(--teal); }
     header .wm-sub { color: var(--mutedDark); font-weight: 700; font-size: 0.72rem;
                      letter-spacing: 0.14em; text-transform: uppercase; margin-left: 0.6rem; }
@@ -156,7 +159,19 @@
   </style>
 </head>
 <body>
-  <header><a class="wm" href="/">goyande<span class="dot">.</span></a><span class="wm-sub">Website Audit</span></header>
+  <header>
+    <a class="brand" href="/" aria-label="Goyande home">
+      <svg class="lotus" viewBox="8 10 48 40" role="img" aria-label="Goyande lotus">
+        <path d="M32,48 C23,46 14,42 10,35 C19,34 29,41 32,48 Z" fill="#fff" opacity="0.4"/>
+        <path d="M32,48 C41,46 50,42 54,35 C45,34 35,41 32,48 Z" fill="#fff" opacity="0.4"/>
+        <path d="M32,48 C25,42 19,32 18,23 C27,27 31,39 32,48 Z" fill="#fff" opacity="0.85"/>
+        <path d="M32,48 C39,42 45,32 46,23 C37,27 33,39 32,48 Z" fill="#fff" opacity="0.85"/>
+        <path d="M32,48 C28,38 28,22 32,14 C36,22 36,38 32,48 Z" fill="#10B981"/>
+      </svg>
+      <span class="wm">goyande<span class="dot">.</span></span>
+    </a>
+    <span class="wm-sub">Website Audit</span>
+  </header>
   <main>{% block content %}{% endblock %}</main>
 </body>
 </html>

@@ -41,6 +41,7 @@
       <div>
         <div class="kicker">{{ page_one.status_label }}{{ ' · change vs last run' if site_delta is not none else '' }}</div>
         <h1>{{ page_one.verdict }}</h1>
+        <p class="lede">Audited {{ (latest.started_at or latest.created_at).strftime('%d %b %Y at %H:%M') }}.</p>
         <a class="cta-download" href="/sites/{{ site.id }}/report" download>Download your report (branded PDF)</a>
       </div>
     </div>
