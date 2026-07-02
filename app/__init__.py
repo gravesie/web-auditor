@@ -2,4 +2,4 @@
 
 # App version. Bump this on each update; it is stamped into the PDF report footer.
 # Keep in sync with the version in pyproject.toml.
-__version__ = "0.16.0"
+__version__ = "0.17.0"

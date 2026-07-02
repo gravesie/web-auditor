@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Audit limit reached — Goyande Website Audit{% endblock %}
+{% block content %}
+  <div style="max-width:560px; margin:3rem auto 0;">
+    <div class="card">
+      <h2 style="margin-top:0;">You've used your {{ max }} free audits</h2>
+      <p class="muted">Create an account to keep auditing, or talk to us about pricing
+        for more sites and deeper reporting.</p>
+      <div style="margin-top:1rem;">
+        <a class="cta-download" href="/login">Sign in to your account</a>
+        <a href="mailto:hello@pggi.co.uk?subject=Goyande%20audit%20pricing"
+           style="margin-left:1rem;">Contact us about pricing</a>
+      </div>
+    </div>
+  </div>
+{% endblock %}
