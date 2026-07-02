@@ -17,8 +17,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.templating import Jinja2Templates
 
+from app import __version__
 from app.acquisition.screenshot import capture_screenshot
-from app.auth import clear_session, current_user, login_session, require_admin
+from app.auth import (
+    ADMIN_ROLES,
+    clear_session,
+    current_user,
+    login_session,
+    require_admin,
+    require_user,
+)
 from app.config import settings
 from app.db import get_session
 from app.magic import send_magic_link, verify_magic_token
@@ -247,16 +255,44 @@ def capture_email(
     )
 
 
+_ADMIN_SORTS = {"site", "customer", "score", "last_run"}
+_PER_PAGE_OPTIONS = [25, 50, 100, 200]
+
+
+def _sort_key(sort: str):
+    if sort == "site":
+        return lambda r: (r["site"].name or r["site"].domain).lower()
+    if sort == "customer":
+        return lambda r: r["customer"].lower()
+    if sort == "score":
+        return lambda r: (
+            r["run"].site_score if r["run"] and r["run"].site_score is not None else -1
+        )
+    return lambda r: (r["run"].started_at.timestamp() if r["run"] and r["run"].started_at else 0)
+
+
 @router.get("/admin", response_class=HTMLResponse)
 def admin_dashboard(
     request: Request,
     _: User = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
-    """Every customer's sites, plus the server controls. Goyande staff only."""
-    sites = session.execute(
-        select(Site).order_by(Site.account_id, Site.created_at.desc())
-    ).scalars().all()
+    """Every customer's sites, sortable and paginated. Goyande staff only."""
+    params = request.query_params
+    sort = params.get("sort") if params.get("sort") in _ADMIN_SORTS else "last_run"
+    direction = params.get("dir") if params.get("dir") in ("asc", "desc") else "desc"
+    try:
+        per_page = int(params.get("per_page", 25))
+    except ValueError:
+        per_page = 25
+    if per_page not in _PER_PAGE_OPTIONS:
+        per_page = 25
+    try:
+        page = max(1, int(params.get("page", 1)))
+    except ValueError:
+        page = 1
+
+    sites = session.execute(select(Site)).scalars().all()
     names = {a.id: a.name for a in session.execute(select(Account)).scalars().all()}
     rows = [
         {
@@ -266,9 +302,71 @@ def admin_dashboard(
         }
         for site in sites
     ]
+    rows.sort(key=_sort_key(sort), reverse=(direction == "desc"))
+
+    total = len(rows)
+    pages = max(1, -(-total // per_page))  # ceil
+    page = min(page, pages)
+    start = (page - 1) * per_page
     return templates.TemplateResponse(
-        request, "admin_dashboard.html", {"rows": rows, "customer_count": len(names)}
+        request,
+        "admin_dashboard.html",
+        {
+            "rows": rows[start : start + per_page],
+            "customer_count": len(names),
+            "total": total,
+            "sort": sort,
+            "dir": direction,
+            "per_page": per_page,
+            "per_page_options": _PER_PAGE_OPTIONS,
+            "page": page,
+            "pages": pages,
+            "version": __version__,
+        },
     )
+
+
+@router.get("/admin/users", response_class=HTMLResponse)
+def admin_users(
+    request: Request,
+    current: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    """All registered users and their access level. Goyande staff only."""
+    users = session.execute(select(User).order_by(User.created_at)).scalars().all()
+    names = {a.id: a.name for a in session.execute(select(Account)).scalars().all()}
+    rows = [
+        {
+            "user": user,
+            "account": names.get(user.account_id, "—"),
+            "is_admin": user.role in ADMIN_ROLES,
+            "is_master": user.role == "owner",
+            "is_self": user.id == current.id,
+        }
+        for user in users
+    ]
+    return templates.TemplateResponse(
+        request, "admin_users.html", {"rows": rows, "version": __version__}
+    )
+
+
+@router.post("/admin/users/{user_id}/role")
+def set_user_role(
+    user_id: UUID,
+    action: str = Form(...),
+    current: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Promote a customer to admin, or demote an admin to customer."""
+    target = session.get(User, user_id)
+    if target is not None:
+        if action == "promote":
+            target.role = "admin"
+        elif action == "demote" and target.id != current.id and target.role != "owner":
+            # Never demote yourself or the master (owner) account.
+            target.role = "member"
+        session.commit()
+    return RedirectResponse("/admin/users", status_code=303)
 
 
 # Static /sites paths must be declared before the dynamic /sites/{site_id} route,
@@ -382,6 +480,22 @@ def run_site(
     create_pending_run(site.domain, account_id=account.id)  # queued
     ensure_worker()  # make sure something is there to execute it
     return RedirectResponse(url=f"/sites/{site_id}", status_code=303)
+
+
+@router.post("/sites/{site_id}/delete")
+def delete_site(
+    site_id: UUID,
+    user: User = Depends(require_user),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Delete a site and its runs. Admins may delete any; others only their own."""
+    site = session.get(Site, site_id)
+    is_admin = user.role in ADMIN_ROLES
+    if site is None or (not is_admin and site.account_id != user.account_id):
+        return RedirectResponse("/admin" if is_admin else "/", status_code=303)
+    session.delete(site)
+    session.commit()
+    return RedirectResponse("/admin" if is_admin else "/", status_code=303)
 
 
 @router.get("/worker/status", response_class=HTMLResponse)

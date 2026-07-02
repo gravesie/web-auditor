@@ -1,0 +1,6 @@
+<div style="display:flex; gap:1.3rem; align-items:baseline; margin-bottom:1.2rem;
+            border-bottom:1px solid var(--line); padding-bottom:0.6rem;">
+  <strong style="font-size:0.78rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--steel);">Admin</strong>
+  <a href="/admin" {% if request.url.path == '/admin' %}style="font-weight:700; color:var(--navy);"{% endif %}>Sites</a>
+  <a href="/admin/users" {% if request.url.path == '/admin/users' %}style="font-weight:700; color:var(--navy);"{% endif %}>Users</a>
+</div>

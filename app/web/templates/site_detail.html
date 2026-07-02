@@ -9,10 +9,9 @@
   <div class="card">
     <form method="post" action="/sites/{{ site.id }}/run"
           style="display:inline; margin-right:0.75rem;">
-      <button type="submit">Run audit</button>
+      <button type="submit">{% if latest %}Re-run audit{% else %}Run audit{% endif %}</button>
     </form>
     <span hx-get="/sites/{{ site.id }}/status" hx-trigger="load" hx-swap="outerHTML"></span>
-    <span style="float:right;" hx-get="/worker/status" hx-trigger="load" hx-swap="outerHTML"></span>
   </div>
 
   {% if latest and page_one %}

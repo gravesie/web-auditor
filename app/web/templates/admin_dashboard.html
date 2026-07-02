@@ -1,14 +1,25 @@
 {% extends "base.html" %}
 {% from "_macros.html" import score_bar %}
 {% block title %}Admin — Goyande Website Audit{% endblock %}
+{% macro sorthead(key, label) %}
+  {% set nd = 'desc' if (sort == key and dir == 'asc') else 'asc' %}
+  <th><a href="/admin?sort={{ key }}&dir={{ nd }}&per_page={{ per_page }}">{{ label }}{% if sort == key %} {{ '▲' if dir == 'asc' else '▼' }}{% endif %}</a></th>
+{% endmacro %}
 {% block content %}
+  {% include "_admin_nav.html" %}
   <h2 style="display:flex; justify-content:space-between; align-items:center;">
-    All sites <span class="muted" style="font-size:0.85rem;">{{ rows | length }} sites · {{ customer_count }} customer(s)</span>
+    All sites <span class="muted" style="font-size:0.85rem;">{{ total }} sites · {{ customer_count }} customer(s)</span>
   </h2>
   {% if rows %}
     <div class="card">
       <table>
-        <thead><tr><th>Site</th><th>Customer</th><th>Latest score</th><th>Last run</th></tr></thead>
+        <thead><tr>
+          {{ sorthead('site', 'Site') }}
+          {{ sorthead('customer', 'Customer') }}
+          {{ sorthead('score', 'Latest score') }}
+          {{ sorthead('last_run', 'Last run') }}
+          <th></th>
+        </tr></thead>
         <tbody>
           {% for row in rows %}
             <tr>
@@ -20,18 +31,38 @@
               <td>
                 {% if row.run and row.run.site_score is not none %}
                   {{ score_bar(row.run.site_score) }}
-                {% else %}
-                  <span class="muted">no runs</span>
-                {% endif %}
+                {% else %}<span class="muted">no runs</span>{% endif %}
               </td>
               <td class="muted">
                 {% if row.run and row.run.started_at %}{{ row.run.started_at.strftime('%d %b %Y, %H:%M') }}{% else %}&mdash;{% endif %}
+              </td>
+              <td style="text-align:right;">
+                <form method="post" action="/sites/{{ row.site.id }}/delete" style="display:inline;"
+                      onsubmit="return confirm('Delete {{ row.site.domain }} and all its audits?');">
+                  <button type="submit" style="background:var(--bad); padding:0.3rem 0.7rem; font-size:0.8rem;">Delete</button>
+                </form>
               </td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+
+    {% if total > 25 %}
+      <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.8rem;">
+        <span class="muted" style="font-size:0.85rem;">
+          Per page:
+          {% for opt in per_page_options %}
+            {% if opt == per_page %}<strong>{{ opt }}</strong>{% else %}<a href="/admin?sort={{ sort }}&dir={{ dir }}&per_page={{ opt }}">{{ opt }}</a>{% endif %}
+          {% endfor %}
+        </span>
+        <span style="font-size:0.85rem;">
+          {% if page > 1 %}<a href="/admin?sort={{ sort }}&dir={{ dir }}&per_page={{ per_page }}&page={{ page - 1 }}">&larr; Prev</a>{% else %}<span class="muted">&larr; Prev</span>{% endif %}
+          <span class="muted" style="margin:0 0.6rem;">Page {{ page }} of {{ pages }}</span>
+          {% if page < pages %}<a href="/admin?sort={{ sort }}&dir={{ dir }}&per_page={{ per_page }}&page={{ page + 1 }}">Next &rarr;</a>{% else %}<span class="muted">Next &rarr;</span>{% endif %}
+        </span>
+      </div>
+    {% endif %}
   {% else %}
     <div class="card"><p class="muted">No sites yet.</p></div>
   {% endif %}
@@ -47,4 +78,6 @@
     <div id="admin-out" class="muted"
          style="margin-top:0.7rem; white-space:pre-wrap; font-size:0.82rem;"></div>
   </div>
+
+  {% include "_admin_footer.html" %}
 {% endblock %}
