@@ -27,6 +27,10 @@ ADMIN_ROLES = {"owner", "admin"}
 
 def login_session(request: Request, user: User) -> None:
     request.session[SESSION_USER_KEY] = str(user.id)
+    # Email and role are stored for display only (header link, greeting). Authorisation
+    # always re-reads the user from the database via current_user, never the session.
+    request.session["email"] = user.email
+    request.session["role"] = user.role
 
 
 def clear_session(request: Request) -> None:

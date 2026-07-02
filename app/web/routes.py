@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.templating import Jinja2Templates
@@ -20,6 +20,7 @@ from app.auth import clear_session, current_user, login_session, require_admin
 from app.db import get_session
 from app.models import Account, AuditRun, Site, User
 from app.models.enums import RunStatus
+from app.plans import at_site_limit, max_sites_for
 from app.reporting.presentation import build_page_one
 from app.reporting.view import build_action_list, build_audit_view, build_comparison
 from app.runner import create_pending_run
@@ -107,6 +108,7 @@ def dashboard(
     session: Session = Depends(get_session),
     account: Account = Depends(get_current_account),
 ) -> HTMLResponse:
+    """The account's own sites: the customer view."""
     sites = (
         session.execute(
             select(Site)
@@ -118,7 +120,38 @@ def dashboard(
     )
     rows = [{"site": site, "run": _latest_completed_run(session, site.id)} for site in sites]
     return templates.TemplateResponse(
-        request, "dashboard.html", {"rows": rows, "account": account}
+        request,
+        "dashboard.html",
+        {
+            "rows": rows,
+            "account": account,
+            "site_limit": max_sites_for(account.plan_tier),
+            "at_limit": at_site_limit(len(sites), account.plan_tier),
+        },
+    )
+
+
+@router.get("/admin", response_class=HTMLResponse)
+def admin_dashboard(
+    request: Request,
+    _: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    """Every customer's sites, plus the server controls. Goyande staff only."""
+    sites = session.execute(
+        select(Site).order_by(Site.account_id, Site.created_at.desc())
+    ).scalars().all()
+    names = {a.id: a.name for a in session.execute(select(Account)).scalars().all()}
+    rows = [
+        {
+            "site": site,
+            "run": _latest_completed_run(session, site.id),
+            "customer": names.get(site.account_id, "—"),
+        }
+        for site in sites
+    ]
+    return templates.TemplateResponse(
+        request, "admin_dashboard.html", {"rows": rows, "customer_count": len(names)}
     )
 
 
@@ -146,6 +179,21 @@ def create_site(
         return templates.TemplateResponse(
             request, "site_form.html", {"site": None, "error": "Enter a valid domain."},
             status_code=400,
+        )
+    site_count = session.execute(
+        select(func.count()).select_from(Site).where(Site.account_id == account.id)
+    ).scalar_one()
+    if at_site_limit(site_count, account.plan_tier):
+        limit = max_sites_for(account.plan_tier)
+        return templates.TemplateResponse(
+            request,
+            "site_form.html",
+            {
+                "site": None,
+                "error": f"You've reached your plan's limit of {limit} sites. "
+                "Remove a site or upgrade to add more.",
+            },
+            status_code=403,
         )
     site = Site(
         account_id=account.id,

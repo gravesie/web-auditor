@@ -174,7 +174,13 @@
     </a>
     <span class="wm-sub">Website Audit</span>
     {% if request.session.get('user_id') %}
-      <a href="/logout" style="margin-left:auto; color:#fff; font-size:0.85rem;">Log out</a>
+      <span style="margin-left:auto; display:inline-flex; align-items:center; gap:1rem;">
+        {% if request.session.get('role') in ['owner', 'admin'] %}
+          <a href="/admin" style="color:#fff; font-size:0.85rem;">Admin</a>
+        {% endif %}
+        <span class="wm-sub" style="margin-left:0;">{{ request.session.get('email') }}</span>
+        <a href="/logout" style="color:#fff; font-size:0.85rem;">Log out</a>
+      </span>
     {% endif %}
   </header>
   <main>{% block content %}{% endblock %}</main>

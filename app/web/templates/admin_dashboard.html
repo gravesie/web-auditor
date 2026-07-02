@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "_macros.html" import score_bar %}
+{% block title %}Admin — Goyande Website Audit{% endblock %}
+{% block content %}
+  <h2 style="display:flex; justify-content:space-between; align-items:center;">
+    All sites <span class="muted" style="font-size:0.85rem;">{{ rows | length }} sites · {{ customer_count }} customer(s)</span>
+  </h2>
+  {% if rows %}
+    <div class="card">
+      <table>
+        <thead><tr><th>Site</th><th>Customer</th><th>Latest score</th><th>Last run</th></tr></thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <td>
+                <a href="/sites/{{ row.site.id }}">{{ row.site.name or row.site.domain }}</a>
+                <div class="muted">{{ row.site.domain }}</div>
+              </td>
+              <td class="muted">{{ row.customer }}</td>
+              <td>
+                {% if row.run and row.run.site_score is not none %}
+                  {{ score_bar(row.run.site_score) }}
+                {% else %}
+                  <span class="muted">no runs</span>
+                {% endif %}
+              </td>
+              <td class="muted">
+                {% if row.run and row.run.started_at %}{{ row.run.started_at.strftime('%d %b %Y, %H:%M') }}{% else %}&mdash;{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="card"><p class="muted">No sites yet.</p></div>
+  {% endif %}
+
+  <div class="card">
+    <h3 style="margin-top:0;">Server</h3>
+    <p class="muted" style="margin-top:0;">Manage the running server without the terminal.</p>
+    <button hx-post="/admin/refresh" hx-target="#admin-out" hx-swap="innerHTML"
+            hx-disabled-elt="this">Refresh code (git pull)</button>
+    <button hx-post="/admin/restart" hx-target="#admin-out" hx-swap="innerHTML"
+            hx-confirm="Restart the server now? Any audit in progress will stop."
+            hx-disabled-elt="this" style="margin-left:0.6rem;">Restart server</button>
+    <div id="admin-out" class="muted"
+         style="margin-top:0.7rem; white-space:pre-wrap; font-size:0.82rem;"></div>
+  </div>
+{% endblock %}
