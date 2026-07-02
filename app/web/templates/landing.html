@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Goyande Website Audit{% endblock %}
+{% block content %}
+  <div style="max-width:620px; margin:3rem auto 0; text-align:center;">
+    <svg viewBox="8 10 48 40" width="72" height="60" role="img" aria-label="Goyande lotus"
+         style="margin-bottom:0.5rem;">
+      <path d="M32,48 C23,46 14,42 10,35 C19,34 29,41 32,48 Z" fill="#102A4C" opacity="0.4"/>
+      <path d="M32,48 C41,46 50,42 54,35 C45,34 35,41 32,48 Z" fill="#102A4C" opacity="0.4"/>
+      <path d="M32,48 C25,42 19,32 18,23 C27,27 31,39 32,48 Z" fill="#102A4C" opacity="0.85"/>
+      <path d="M32,48 C39,42 45,32 46,23 C37,27 33,39 32,48 Z" fill="#102A4C" opacity="0.85"/>
+      <path d="M32,48 C28,38 28,22 32,14 C36,22 36,38 32,48 Z" fill="#10B981"/>
+    </svg>
+    <h1 style="font-size:1.9rem; font-weight:800; margin:0 0 0.6rem;">{{ cta }}</h1>
+    <p class="muted" style="font-size:1.05rem; margin:0 auto 1.4rem; max-width:34rem;">
+      Enter your website and we'll audit its SEO, GEO visibility and conversion,
+      then send you the results.
+    </p>
+
+    {% if error %}
+      <div class="card error" style="padding:0.7rem 0.9rem; text-align:left;">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/audit"
+          style="display:flex; gap:0.6rem; justify-content:center; margin-top:0.4rem;">
+      <input type="text" name="url" placeholder="yourwebsite.com" autofocus
+             style="flex:1; max-width:360px;">
+      <button type="submit">Audit my website</button>
+    </form>
+    <p class="muted" style="font-size:0.8rem; margin-top:1rem;">Free to try. No account needed to start.</p>
+  </div>
+{% endblock %}

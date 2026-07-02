@@ -1,5 +1,6 @@
 """Server-rendered dashboard views: site list and run drill-down."""
 
+import base64
 import html
 import os
 import subprocess
@@ -16,11 +17,20 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.templating import Jinja2Templates
 
+from app.acquisition.screenshot import capture_screenshot
 from app.auth import clear_session, current_user, login_session, require_admin
+from app.config import settings
 from app.db import get_session
-from app.magic import verify_magic_token
+from app.magic import send_magic_link, verify_magic_token
 from app.models import Account, AuditRun, Site, User
 from app.models.enums import RunStatus
+from app.onboarding import (
+    FREE_PLAN,
+    MAX_VISITOR_AUDITS,
+    normalize_domain,
+    valid_domain,
+    valid_email,
+)
 from app.plans import at_site_limit, max_sites_for
 from app.reporting.presentation import build_page_one
 from app.reporting.view import build_action_list, build_audit_view, build_comparison
@@ -119,12 +129,17 @@ def magic_login(
 
 
 @router.get("/", response_class=HTMLResponse)
-def dashboard(
+def home(
     request: Request,
     session: Session = Depends(get_session),
-    account: Account = Depends(get_current_account),
+    user: User | None = Depends(current_user),
 ) -> HTMLResponse:
-    """The account's own sites: the customer view."""
+    """The front door: the public landing for visitors, the dashboard once signed in."""
+    if user is None:
+        return templates.TemplateResponse(
+            request, "landing.html", {"cta": settings.landing_cta, "error": None}
+        )
+    account = session.get(Account, user.account_id)
     sites = (
         session.execute(
             select(Site)
@@ -144,6 +159,91 @@ def dashboard(
             "site_limit": max_sites_for(account.plan_tier),
             "at_limit": at_site_limit(len(sites), account.plan_tier),
         },
+    )
+
+
+@router.post("/audit", response_class=HTMLResponse)
+def start_audit(
+    request: Request, url: str = Form(...), session: Session = Depends(get_session)
+) -> HTMLResponse:
+    """Public: validate a URL, start an audit, and ask for the visitor's email."""
+    if not valid_domain(url):
+        return templates.TemplateResponse(
+            request,
+            "landing.html",
+            {"cta": settings.landing_cta, "error": "Please enter a valid website address."},
+            status_code=400,
+        )
+    ob = request.session.get("ob") or {"account_id": None, "count": 0, "email": False}
+
+    if ob["count"] >= MAX_VISITOR_AUDITS:
+        return templates.TemplateResponse(
+            request, "audit_limit.html", {"max": MAX_VISITOR_AUDITS}
+        )
+    if ob["count"] >= 1 and not ob["email"]:
+        # No second audit until we have the email for the first.
+        return templates.TemplateResponse(
+            request, "audit_running.html", {"await_email": True, "email_error": None}
+        )
+
+    domain = normalize_domain(url)
+    account = session.get(Account, UUID(ob["account_id"])) if ob["account_id"] else None
+    if account is None:
+        account = Account(name=f"Visitor: {domain}", plan_tier=FREE_PLAN)
+        session.add(account)
+        session.commit()
+    ob["account_id"] = str(account.id)
+
+    create_pending_run(domain, account_id=account.id, email=False)
+    ensure_worker()
+    shot = capture_screenshot(domain)
+    ob["count"] += 1
+    request.session["ob"] = ob
+
+    return templates.TemplateResponse(
+        request,
+        "audit_running.html",
+        {
+            "await_email": False,
+            "domain": domain,
+            "screenshot": base64.b64encode(shot).decode("ascii") if shot else None,
+            "email_captured": ob["email"],
+            "count": ob["count"],
+            "max": MAX_VISITOR_AUDITS,
+            "email_error": None,
+        },
+    )
+
+
+@router.post("/audit/email", response_class=HTMLResponse)
+def capture_email(
+    request: Request, email: str = Form(...), session: Session = Depends(get_session)
+) -> Response:
+    """Public: capture the visitor's email and send them a magic link to their results."""
+    ob = request.session.get("ob") or {}
+    if not ob.get("account_id"):
+        return RedirectResponse("/", status_code=303)
+    if not valid_email(email):
+        return templates.TemplateResponse(
+            request,
+            "audit_running.html",
+            {"await_email": True, "email_error": "Please enter a valid email address."},
+            status_code=400,
+        )
+    addr = email.strip().lower()
+    account_id = UUID(ob["account_id"])
+    user = session.execute(select(User).where(User.email == addr)).scalar_one_or_none()
+    if user is None:
+        user = User(account_id=account_id, email=addr, role="member")
+        session.add(user)
+        session.commit()
+    ob["email"] = True
+    request.session["ob"] = ob
+    send_magic_link(user)
+    return templates.TemplateResponse(
+        request,
+        "audit_running.html",
+        {"await_email": False, "email_captured": True, "email_sent_to": addr, "email_error": None},
     )
 
 

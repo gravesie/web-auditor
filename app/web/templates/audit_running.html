@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Your audit — Goyande Website Audit{% endblock %}
+{% macro email_form(heading, blurb, button) %}
+  <div class="card">
+    <h3 style="margin-top:0;">{{ heading }}</h3>
+    <p class="muted" style="margin-top:0;">{{ blurb }}</p>
+    {% if email_error %}
+      <div class="card error" style="padding:0.6rem 0.8rem;">{{ email_error }}</div>
+    {% endif %}
+    <form method="post" action="/audit/email" style="display:flex; gap:0.6rem;">
+      <input type="email" name="email" placeholder="you@company.com" autofocus style="flex:1;">
+      <button type="submit">{{ button }}</button>
+    </form>
+  </div>
+{% endmacro %}
+{% block content %}
+  <div style="max-width:640px; margin:2.5rem auto 0;">
+    {% if await_email %}
+      {{ email_form(
+        "Add your email to run another audit",
+        "We send results by email, so we need yours before starting the next audit.",
+        "Save and continue") }}
+
+    {% elif email_captured and email_sent_to is defined %}
+      <div class="card">
+        <h2 style="margin-top:0;">Check your inbox</h2>
+        <p>We've emailed a secure link to <strong>{{ email_sent_to }}</strong>. Open it to
+          see your results the moment they're ready, and to run more audits.</p>
+      </div>
+
+    {% else %}
+      <div class="card">
+        <h2 style="margin-top:0;">Your audit is running</h2>
+        <p class="muted">Auditing <strong>{{ domain }}</strong>. This takes a minute or two.</p>
+        {% if screenshot %}
+          <img src="data:image/png;base64,{{ screenshot }}" alt="Screenshot of {{ domain }}"
+               style="max-width:100%; border:1px solid var(--line); border-radius:8px; margin-top:0.6rem;">
+        {% endif %}
+        {% if count is defined %}
+          <p class="muted" style="font-size:0.82rem; margin-bottom:0;">Audit {{ count }} of {{ max }}.</p>
+        {% endif %}
+      </div>
+      {% if not email_captured %}
+        {{ email_form(
+          "Where should we send your results?",
+          "We'll email you a secure link to your audit as soon as it's ready.",
+          "Send my results") }}
+      {% endif %}
+    {% endif %}
+  </div>
+{% endblock %}

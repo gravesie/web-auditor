@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     # report links). Override for any non-local deployment.
     base_url: str = "http://127.0.0.1:8000"
 
+    # Headline on the public landing page. Editable here (an admin edit screen is a
+    # planned follow-up).
+    landing_cta: str = "Audit your website. GEO, SEO, and everything you need to know."
+
     # Anthropic API key for the LLM judgement passes (GEO answerability, and content
     # quality later). Optional: those checks degrade to needs-connection without it.
     anthropic_api_key: str | None = None
