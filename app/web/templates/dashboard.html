@@ -1,14 +1,26 @@
 {% extends "base.html" %}
 {% from "_macros.html" import score_bar %}
-{% block title %}Admin dashboard — Goyande Website Audit{% endblock %}
+{% block title %}Your sites — Goyande Website Audit{% endblock %}
 {% block content %}
   <h2 style="display:flex; justify-content:space-between; align-items:center;">
-    All sites <a href="/sites/new" style="font-size:0.85rem;">+ Add site</a>
+    Your sites
+    {% if not at_limit %}
+      <a href="/sites/new" style="font-size:0.85rem;">+ Add site</a>
+    {% else %}
+      <span class="muted" style="font-size:0.85rem;">Site limit reached</span>
+    {% endif %}
   </h2>
+
+  {% if site_limit is not none %}
+    <p class="muted" style="margin-top:-0.4rem;">
+      {{ rows | length }} of {{ site_limit }} sites used on the {{ account.plan_tier }} plan.
+    </p>
+  {% endif %}
+
   {% if rows %}
     <div class="card">
       <table>
-        <thead><tr><th>Site</th><th>Customer</th><th>Latest score</th><th>Last run</th></tr></thead>
+        <thead><tr><th>Site</th><th>Latest score</th><th>Last run</th></tr></thead>
         <tbody>
           {% for row in rows %}
             <tr>
@@ -16,7 +28,6 @@
                 <a href="/sites/{{ row.site.id }}">{{ row.site.name or row.site.domain }}</a>
                 <div class="muted">{{ row.site.domain }}</div>
               </td>
-              <td class="muted">{{ account.name }}</td>
               <td>
                 {% if row.run and row.run.site_score is not none %}
                   {{ score_bar(row.run.site_score) }}
@@ -37,16 +48,4 @@
       <p class="muted">No sites yet. <a href="/sites/new">Add a site</a> to run your first audit.</p>
     </div>
   {% endif %}
-
-  <div class="card">
-    <h3 style="margin-top:0;">Admin</h3>
-    <p class="muted" style="margin-top:0;">Manage the running server without the terminal.</p>
-    <button hx-post="/admin/refresh" hx-target="#admin-out" hx-swap="innerHTML"
-            hx-disabled-elt="this">Refresh code (git pull)</button>
-    <button hx-post="/admin/restart" hx-target="#admin-out" hx-swap="innerHTML"
-            hx-confirm="Restart the server now? Any audit in progress will stop."
-            hx-disabled-elt="this" style="margin-left:0.6rem;">Restart server</button>
-    <div id="admin-out" class="muted"
-         style="margin-top:0.7rem; white-space:pre-wrap; font-size:0.82rem;"></div>
-  </div>
 {% endblock %}
