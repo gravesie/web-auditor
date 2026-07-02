@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "web-auditor"
-version = "0.15.0"
+version = "0.16.0"
 description = "Website audit suite: nine sub-audits scored into a single site score, run outside-in or enriched with connected data."
 requires-python = ">=3.13"
 dependencies = [

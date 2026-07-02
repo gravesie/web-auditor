@@ -14,12 +14,9 @@ from datetime import UTC, datetime
 from email.message import EmailMessage
 from pathlib import Path
 
-import httpx
-
 from app.config import settings
+from app.mailer import send_email
 from app.reporting.report import Report, generate_report
-
-RESEND_ENDPOINT = "https://api.resend.com/emails"
 
 
 def _subject(report: Report) -> str:
@@ -37,33 +34,11 @@ def _body(report: Report) -> str:
 
 
 def _send_via_resend(report: Report, subject: str, body: str) -> tuple[bool, str]:
-    payload = {
-        "from": settings.email_from,
-        "to": [settings.email_to],
-        "subject": subject,
-        "text": body,
-        "attachments": [
-            {
-                "filename": report.filename,
-                "content": base64.b64encode(report.pdf).decode("ascii"),
-            }
-        ],
+    attachment = {
+        "filename": report.filename,
+        "content": base64.b64encode(report.pdf).decode("ascii"),
     }
-    try:
-        resp = httpx.post(
-            RESEND_ENDPOINT,
-            json=payload,
-            timeout=30.0,
-            headers={
-                "Authorization": f"Bearer {settings.resend_api_key}",
-                "Content-Type": "application/json",
-            },
-        )
-    except httpx.HTTPError as exc:
-        return False, f"{type(exc).__name__}: {exc}"
-    if resp.status_code in (200, 201):
-        return True, resp.json().get("id", "sent")
-    return False, f"HTTP {resp.status_code}: {resp.text[:200]}"
+    return send_email(settings.email_to, subject, body, attachments=[attachment])
 
 
 def _write_to_outbox(report: Report, subject: str, body: str) -> Path:

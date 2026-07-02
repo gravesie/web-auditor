@@ -18,6 +18,7 @@ from starlette.templating import Jinja2Templates
 
 from app.auth import clear_session, current_user, login_session, require_admin
 from app.db import get_session
+from app.magic import verify_magic_token
 from app.models import Account, AuditRun, Site, User
 from app.models.enums import RunStatus
 from app.plans import at_site_limit, max_sites_for
@@ -100,6 +101,21 @@ def login_submit(
 def logout(request: Request) -> RedirectResponse:
     clear_session(request)
     return RedirectResponse("/login", status_code=303)
+
+
+@router.get("/magic/{token}", response_class=HTMLResponse)
+def magic_login(
+    token: str, request: Request, session: Session = Depends(get_session)
+) -> Response:
+    """Sign a customer in from an emailed magic link."""
+    user_id = verify_magic_token(token)
+    user = session.get(User, UUID(user_id)) if user_id else None
+    if user is None or not user.is_active:
+        return templates.TemplateResponse(
+            request, "magic_invalid.html", {}, status_code=400
+        )
+    login_session(request, user)
+    return RedirectResponse("/", status_code=303)
 
 
 @router.get("/", response_class=HTMLResponse)
