@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Users — Goyande Website Audit{% endblock %}
+{% block content %}
+  {% include "_admin_nav.html" %}
+  <h2>Users <span class="muted" style="font-size:0.85rem;">{{ rows | length }}</span></h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Email</th><th>Account</th><th>Access</th><th>Joined</th><th></th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+          <tr>
+            <td>{{ r.user.email }}{% if r.is_self %} <span class="muted">(you)</span>{% endif %}</td>
+            <td class="muted">{{ r.account }}</td>
+            <td>
+              {% if r.is_admin %}
+                <span class="badge b-info">Admin{% if r.is_master %} · master{% endif %}</span>
+              {% else %}
+                <span class="badge b-pass">Customer</span>
+              {% endif %}
+            </td>
+            <td class="muted">{{ r.user.created_at.strftime('%d %b %Y') }}</td>
+            <td style="text-align:right;">
+              {% if not r.is_admin %}
+                <form method="post" action="/admin/users/{{ r.user.id }}/role" style="display:inline;">
+                  <input type="hidden" name="action" value="promote">
+                  <button type="submit" style="padding:0.3rem 0.7rem; font-size:0.8rem;">Make admin</button>
+                </form>
+              {% elif not r.is_self and not r.is_master %}
+                <form method="post" action="/admin/users/{{ r.user.id }}/role" style="display:inline;"
+                      onsubmit="return confirm('Demote {{ r.user.email }} to customer?');">
+                  <input type="hidden" name="action" value="demote">
+                  <button type="submit" style="padding:0.3rem 0.7rem; font-size:0.8rem; background:var(--steel);">Demote</button>
+                </form>
+              {% else %}
+                <span class="muted" style="font-size:0.8rem;">&mdash;</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "_admin_footer.html" %}
+{% endblock %}

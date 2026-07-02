@@ -7,7 +7,7 @@
     {% if run.status in ['pending', 'running'] %}
       <span class="muted">— in progress, updates automatically…</span>
     {% elif run.status == 'complete' %}
-      <a href="/sites/{{ site_id }}">view results</a>
+      <span class="muted">— completed {{ (run.finished_at or run.started_at or run.created_at).strftime('%d %b %Y, %H:%M') }}</span>
     {% elif run.status == 'failed' %}
       <span class="delta down">failed</span>
       {% if run.error_message %}<span class="muted">{{ run.error_message }}</span>{% endif %}
